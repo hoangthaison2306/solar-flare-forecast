@@ -1,0 +1,14 @@
+# Ignore model weights
+*.pth
+*.pt
+
+# Python cache
+__pycache__/
+*.pyc
+
+# virtual environments
+venv/
+.env
+
+# datasets
+data/
