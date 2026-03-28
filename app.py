@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 from PIL import Image
+from datetime import timedelta
 
 # ── Must be first ──────────────────────────────────────────────────────────
 st.set_page_config(
@@ -15,7 +16,6 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 
-/* ── Global reset ── */
 html, body, [data-testid="stApp"] {
     background-color: #05050f !important;
     color: #e8e4d8 !important;
@@ -36,7 +36,6 @@ html, body, [data-testid="stApp"] {
     margin-top: 0 !important;
 }
 
-/* ── TCU top bar ── */
 .tcu-banner {
     width: 100%;
     height: 56px;
@@ -73,10 +72,8 @@ html, body, [data-testid="stApp"] {
     50%    { opacity:.3; transform:scale(.6); }
 }
 
-/* ── Page padding ── */
 .page-content { padding: 1.5rem 2rem 0 2rem; }
 
-/* ── Section labels ── */
 .sec-label {
     font-family:'Space Mono',monospace;
     font-size:9px; letter-spacing:.2em;
@@ -84,7 +81,6 @@ html, body, [data-testid="stApp"] {
     text-transform:uppercase; margin-bottom:10px;
 }
 
-/* ── Alert card ── */
 .alert-card {
     background: linear-gradient(135deg,rgba(255,80,30,.11) 0%,rgba(255,140,60,.04) 100%);
     border: 1px solid rgba(255,90,30,.32);
@@ -102,9 +98,7 @@ html, body, [data-testid="stApp"] {
     background:linear-gradient(135deg,rgba(30,160,255,.09) 0%,rgba(60,200,255,.03) 100%);
     border-color:rgba(30,140,255,.28);
 }
-.alert-card.no-flare::before {
-    background:linear-gradient(180deg,#1e8aff,#44ccff);
-}
+.alert-card.no-flare::before { background:linear-gradient(180deg,#1e8aff,#44ccff); }
 .alert-eyebrow {
     font-family:'Space Mono',monospace;
     font-size:9px; letter-spacing:.22em; color:#ff7a40; margin-bottom:5px;
@@ -114,10 +108,7 @@ html, body, [data-testid="stApp"] {
     font-size:26px; font-weight:600;
     color:#fff5ee; line-height:1.15; margin-bottom:14px;
 }
-.conf-row {
-    display:flex; justify-content:space-between;
-    align-items:center; margin-bottom:5px;
-}
+.conf-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; }
 .conf-label { font-size:11px; color:rgba(232,228,216,.42); font-weight:300; }
 .conf-val-flare   { font-family:'Space Mono',monospace; font-size:14px; font-weight:700; color:#ffaa44; }
 .conf-val-noflare { font-family:'Space Mono',monospace; font-size:14px; font-weight:700; color:#44aaff; }
@@ -133,7 +124,6 @@ html, body, [data-testid="stApp"] {
 .meta-cell-label { font-size:9px; letter-spacing:.12em; color:rgba(232,228,216,.26); text-transform:uppercase; margin-bottom:3px; }
 .meta-cell-val   { font-family:'Space Mono',monospace; font-size:11px; color:rgba(232,228,216,.7); line-height:1.5; }
 
-/* ── Forecast items ── */
 .forecast-item {
     display:flex; align-items:center; gap:13px;
     padding:10px 14px;
@@ -156,7 +146,6 @@ html, body, [data-testid="stApp"] {
 .fi-prob-f   { font-family:'Space Mono',monospace; font-size:12px; color:#ff8844; font-weight:700; white-space:nowrap; }
 .fi-prob-nf  { font-family:'Space Mono',monospace; font-size:12px; color:#44aaff; font-weight:700; white-space:nowrap; }
 
-/* ── History table ── */
 .hist-wrap { overflow-x:auto; margin-top:8px; }
 .hist-table { width:100%; border-collapse:collapse; font-size:11px; }
 .hist-table th {
@@ -177,8 +166,35 @@ html, body, [data-testid="stApp"] {
 .pf  { color:#ff8844 !important; font-weight:700; }
 .pnf { color:#44aaff !important; font-weight:700; }
 
-/* ── st.subheader override ── */
+.goes-wrap { overflow-x:auto; margin-top:8px; }
+.goes-table { width:100%; border-collapse:collapse; font-size:11px; }
+.goes-table th {
+    font-family:'Space Mono',monospace; font-size:8px;
+    letter-spacing:.14em; text-transform:uppercase;
+    color:rgba(232,228,216,.24); font-weight:400;
+    padding:0 8px 8px 0; text-align:left;
+    border-bottom:1px solid rgba(255,255,255,.06);
+}
+.goes-table td {
+    padding:7px 8px 7px 0;
+    font-family:'Space Mono',monospace; font-size:10px;
+    color:rgba(232,228,216,.52);
+    border-bottom:1px solid rgba(255,255,255,.03);
+}
+.goes-badge {
+    display:inline-block; padding:2px 7px; border-radius:3px;
+    font-family:'Space Mono',monospace; font-size:10px; font-weight:700;
+    letter-spacing:.04em;
+}
+.goes-X  { background:rgba(255,40,40,.18);  color:#ff6060; border:1px solid rgba(255,60,60,.35); }
+.goes-M  { background:rgba(255,130,30,.18); color:#ffaa44; border:1px solid rgba(255,130,30,.35); }
+.goes-C  { background:rgba(255,220,60,.14); color:#ffe066; border:1px solid rgba(255,220,60,.30); }
+.goes-B  { background:rgba(80,180,255,.12); color:#66ccff; border:1px solid rgba(80,180,255,.28); }
+.goes-A  { background:rgba(150,255,150,.10);color:#88ee88; border:1px solid rgba(150,255,150,.24); }
+.goes-none{ color:rgba(232,228,216,.18); font-style:italic; }
+
 h2, h3 { color:#e8e4d8 !important; font-family:'DM Sans',sans-serif !important; }
+[data-testid="stDataFrame"] { display:none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -195,36 +211,27 @@ st.markdown("""
 
 st.markdown('<div class="page-content">', unsafe_allow_html=True)
 
-# ── Load data ──────────────────────────────────────────────────────────────
+# ── Load prediction history ────────────────────────────────────────────────
 HISTORY_FILE = Path("prediction_history.csv")
 
 if not HISTORY_FILE.exists():
-    st.warning("No prediction history found yet. Run predict_latest.py to generate predictions.")
+    st.warning("No prediction history found yet.")
     st.stop()
 
 df = pd.read_csv(HISTORY_FILE)
 df["prediction_time"] = pd.to_datetime(df["prediction_time"], errors="coerce")
-df["forecast_end"]    = pd.to_datetime(df["forecast_end"],    errors="coerce")
 
-# fix: graceful error if image_time column is missing (old CSV from predict.py)
-if "image_time" not in df.columns:
-    st.error(
-        "⚠️ prediction_history.csv is missing the `image_time` column. "
-        "This means it was generated by the old predict.py. "
-        "Please re-run **predict_latest.py** (or the fixed predict.py) to regenerate it."
-    )
+if "image_time" in df.columns:
+    df["image_time"] = pd.to_datetime(df["image_time"], errors="coerce")
+else:
+    st.error("CSV is missing image_time. Run the new prediction pipeline first.")
     st.stop()
 
-df["image_time"] = pd.to_datetime(df["image_time"], errors="coerce")
+df["forecast_end"] = pd.to_datetime(df["forecast_end"], errors="coerce")
 df = df.dropna(subset=["image_time"]).sort_values("image_time", ascending=False).reset_index(drop=True)
-
-if df.empty:
-    st.warning("No valid predictions found in history file.")
-    st.stop()
 
 latest = df.iloc[0]
 
-# one row per image hour, newest 12
 board_df = (
     df.drop_duplicates(subset="image_time", keep="first")
       .head(12)
@@ -237,6 +244,14 @@ def is_flare(label):
 
 def fmt_prob(x):
     return x * 100 if x <= 1.0 else x
+
+def goes_badge_html(cls: str) -> str:
+    cls = (cls or "").strip()
+    if not cls:
+        return '<span class="goes-none">—</span>'
+    letter = cls[0].upper()
+    css = {"X": "goes-X", "M": "goes-M", "C": "goes-C", "B": "goes-B", "A": "goes-A"}.get(letter, "goes-B")
+    return f'<span class="goes-badge {css}">{cls}</span>'
 
 # ── Two-column layout ──────────────────────────────────────────────────────
 left, right = st.columns([1.3, 1], gap="large")
@@ -281,13 +296,12 @@ with left:
     </div>
     """, unsafe_allow_html=True)
 
-    # Solar image
     st.markdown('<div class="sec-label" style="margin-top:16px;">Latest Solar Image</div>',
                 unsafe_allow_html=True)
     image_path = latest.get("image_path", "")
     if image_path and Path(str(image_path)).exists():
         image = Image.open(str(image_path))
-        st.image(image, use_container_width=True)
+        st.image(image, width="stretch")
     else:
         st.markdown("""
         <div style="background:#000;border-radius:10px;
@@ -309,9 +323,9 @@ with right:
     items_html = []
     for _, row in board_df.iterrows():
         f        = is_flare(row["prediction_label"])
-        icon_cls = "fi-icon f"  if f else "fi-icon nf"
-        lbl_cls  = "fi-label-f" if f else "fi-label-nf"
-        prb_cls  = "fi-prob-f"  if f else "fi-prob-nf"
+        icon_cls = "fi-icon f"   if f else "fi-icon nf"
+        lbl_cls  = "fi-label-f"  if f else "fi-label-nf"
+        prb_cls  = "fi-prob-f"   if f else "fi-prob-nf"
         icon     = "🔥" if f else "✅"
         text     = "Yes Flare" if f else "No Flare"
         pct_r    = fmt_prob(row["probability"])
@@ -331,7 +345,7 @@ with right:
     st.markdown("".join(items_html), unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════
-# BOTTOM — Recent prediction history (custom styled table)
+# BOTTOM — Recent prediction history
 # ════════════════════════════════════════════════════════════════
 st.markdown('<div class="sec-label" style="margin-top:28px;">Recent Prediction History</div>',
             unsafe_allow_html=True)
@@ -371,4 +385,95 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+# ════════════════════════════════════════════════════════════════
+# GOES FLARE DATA — from lmsal_all_2026_clean.csv (scrape_ssw.py)
+# ════════════════════════════════════════════════════════════════
+
+SSW_FILE = Path("lmsal_all_2026_clean.csv")
+
+
+@st.cache_data(ttl=3600)
+def load_ssw_flares(path: Path) -> pd.DataFrame:
+    """Load CSV written by scrape_ssw.py — columns: Start, GOES Class, Class_Type"""
+    if not path.exists():
+        return pd.DataFrame(columns=["Start", "GOES Class", "Class_Type"])
+    df_ssw = pd.read_csv(path)
+    df_ssw["Start"] = pd.to_datetime(df_ssw["Start"], errors="coerce")
+    df_ssw = df_ssw.dropna(subset=["Start"]).sort_values("Start").reset_index(drop=True)
+    return df_ssw
+
+
+flare_df = load_ssw_flares(SSW_FILE)
+
+SSW_NOTE = "Source: lmsal_all_2026_clean.csv (scrape_ssw.py)"
+
+# ── Full event log ─────────────────────────────────────────────────────────
+st.markdown(
+    '<div class="sec-label" style="margin-top:36px;">'
+    'All GOES Flare Events (2026-01-01 → Today)</div>',
+    unsafe_allow_html=True,
+)
+
+if flare_df.empty:
+    st.markdown(
+        '<p style="color:rgba(232,228,216,.3);font-size:11px;">'
+        'No flare data found — run scrape_ssw.py to generate lmsal_all_2026_clean.csv.</p>',
+        unsafe_allow_html=True,
+    )
+else:
+    ev_rows = []
+    for _, row in flare_df.sort_values("Start", ascending=False).iterrows():
+        st_str = row["Start"].strftime("%Y-%m-%d %H:%M") if pd.notna(row["Start"]) else "—"
+        badge  = goes_badge_html(str(row.get("GOES Class", "")))
+        ctype  = str(row.get("Class_Type", "")).strip() or "—"
+        ev_rows.append(f"""
+        <tr>
+            <td>{st_str}</td>
+            <td>{badge}</td>
+            <td>{ctype}</td>
+        </tr>""")
+
+    st.markdown(f"""
+<div class="goes-wrap" style="max-height:420px;overflow-y:auto;">
+<table class="goes-table">
+  <thead>
+    <tr>
+      <th>Start (UTC)</th>
+      <th>GOES Class</th>
+      <th>Type</th>
+    </tr>
+  </thead>
+  <tbody>{"".join(ev_rows)}</tbody>
+</table>
+</div>
+<p style="font-size:9px;color:rgba(232,228,216,.22);font-family:'Space Mono',monospace;margin-top:6px;">
+  {len(flare_df)} events · {SSW_NOTE}
+</p>
+""", unsafe_allow_html=True)
+
 st.markdown('</div>', unsafe_allow_html=True)  # close .page-content
+
+# ── Auto-refresh every 60 minutes ─────────────────────────────────────────
+# Reloads the page so the app picks up the latest lmsal_all_2026_clean.csv
+import time as _time
+REFRESH_INTERVAL = 3600   # seconds
+
+if "last_refresh" not in st.session_state:
+    st.session_state["last_refresh"] = _time.time()
+
+elapsed = _time.time() - st.session_state["last_refresh"]
+remaining = max(0, REFRESH_INTERVAL - int(elapsed))
+
+if elapsed >= REFRESH_INTERVAL:
+    st.session_state["last_refresh"] = _time.time()
+    st.cache_data.clear()
+    st.rerun()
+
+# Small footer showing next refresh countdown
+mins, secs = divmod(remaining, 60)
+st.markdown(
+    f'<p style="font-size:9px;color:rgba(232,228,216,.14);'
+    f'font-family:\'Space Mono\',monospace;text-align:right;'
+    f'padding:0 2rem 1rem 0;">next refresh in {mins:02d}:{secs:02d}</p>',
+    unsafe_allow_html=True,
+)
