@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from pathlib import Path
 from PIL import Image
 from datetime import timedelta
@@ -16,6 +17,7 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 
+/* ── Global reset ── */
 html, body, [data-testid="stApp"] {
     background-color: #05050f !important;
     color: #e8e4d8 !important;
@@ -36,6 +38,7 @@ html, body, [data-testid="stApp"] {
     margin-top: 0 !important;
 }
 
+/* ── TCU top bar ── */
 .tcu-banner {
     width: 100%;
     height: 56px;
@@ -72,8 +75,10 @@ html, body, [data-testid="stApp"] {
     50%    { opacity:.3; transform:scale(.6); }
 }
 
+/* ── Page padding ── */
 .page-content { padding: 1.5rem 2rem 0 2rem; }
 
+/* ── Section labels ── */
 .sec-label {
     font-family:'Space Mono',monospace;
     font-size:9px; letter-spacing:.2em;
@@ -81,6 +86,7 @@ html, body, [data-testid="stApp"] {
     text-transform:uppercase; margin-bottom:10px;
 }
 
+/* ── Alert card ── */
 .alert-card {
     background: linear-gradient(135deg,rgba(255,80,30,.11) 0%,rgba(255,140,60,.04) 100%);
     border: 1px solid rgba(255,90,30,.32);
@@ -98,7 +104,9 @@ html, body, [data-testid="stApp"] {
     background:linear-gradient(135deg,rgba(30,160,255,.09) 0%,rgba(60,200,255,.03) 100%);
     border-color:rgba(30,140,255,.28);
 }
-.alert-card.no-flare::before { background:linear-gradient(180deg,#1e8aff,#44ccff); }
+.alert-card.no-flare::before {
+    background:linear-gradient(180deg,#1e8aff,#44ccff);
+}
 .alert-eyebrow {
     font-family:'Space Mono',monospace;
     font-size:9px; letter-spacing:.22em; color:#ff7a40; margin-bottom:5px;
@@ -108,7 +116,10 @@ html, body, [data-testid="stApp"] {
     font-size:26px; font-weight:600;
     color:#fff5ee; line-height:1.15; margin-bottom:14px;
 }
-.conf-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; }
+.conf-row {
+    display:flex; justify-content:space-between;
+    align-items:center; margin-bottom:5px;
+}
 .conf-label { font-size:11px; color:rgba(232,228,216,.42); font-weight:300; }
 .conf-val-flare   { font-family:'Space Mono',monospace; font-size:14px; font-weight:700; color:#ffaa44; }
 .conf-val-noflare { font-family:'Space Mono',monospace; font-size:14px; font-weight:700; color:#44aaff; }
@@ -124,6 +135,7 @@ html, body, [data-testid="stApp"] {
 .meta-cell-label { font-size:9px; letter-spacing:.12em; color:rgba(232,228,216,.26); text-transform:uppercase; margin-bottom:3px; }
 .meta-cell-val   { font-family:'Space Mono',monospace; font-size:11px; color:rgba(232,228,216,.7); line-height:1.5; }
 
+/* ── Forecast items ── */
 .forecast-item {
     display:flex; align-items:center; gap:13px;
     padding:10px 14px;
@@ -146,6 +158,7 @@ html, body, [data-testid="stApp"] {
 .fi-prob-f   { font-family:'Space Mono',monospace; font-size:12px; color:#ff8844; font-weight:700; white-space:nowrap; }
 .fi-prob-nf  { font-family:'Space Mono',monospace; font-size:12px; color:#44aaff; font-weight:700; white-space:nowrap; }
 
+/* ── History table ── */
 .hist-wrap { overflow-x:auto; margin-top:8px; }
 .hist-table { width:100%; border-collapse:collapse; font-size:11px; }
 .hist-table th {
@@ -211,7 +224,7 @@ st.markdown("""
 
 st.markdown('<div class="page-content">', unsafe_allow_html=True)
 
-# ── Load prediction history ────────────────────────────────────────────────
+# ── Load data ──────────────────────────────────────────────────────────────
 HISTORY_FILE = Path("prediction_history.csv")
 
 if not HISTORY_FILE.exists():
@@ -219,6 +232,7 @@ if not HISTORY_FILE.exists():
     st.stop()
 
 df = pd.read_csv(HISTORY_FILE)
+
 df["prediction_time"] = pd.to_datetime(df["prediction_time"], errors="coerce")
 
 if "image_time" in df.columns:
@@ -228,10 +242,12 @@ else:
     st.stop()
 
 df["forecast_end"] = pd.to_datetime(df["forecast_end"], errors="coerce")
+
 df = df.dropna(subset=["image_time"]).sort_values("image_time", ascending=False).reset_index(drop=True)
 
 latest = df.iloc[0]
 
+# one row per image hour, newest 12
 board_df = (
     df.drop_duplicates(subset="image_time", keep="first")
       .head(12)
@@ -243,7 +259,52 @@ def is_flare(label):
     return str(label).strip().lower() in ["flare", "yes flare", "yes"]
 
 def fmt_prob(x):
-    return x * 100 if x <= 1.0 else x
+    return x * 100 if x <= 1.0 else x   # normalise to 0–100
+
+
+# -- Evaluation helpers --------------------------------------------------------
+LMSAL_FILE  = Path("lmsal_all_2026_clean.csv")
+
+def _class_is_mx(goes_class):
+    letter = str(goes_class).strip()[0].upper() if goes_class else "?"
+    return letter in ("M", "X")
+
+@st.cache_data
+def load_lmsal():
+    if not LMSAL_FILE.exists():
+        return None
+    lmsal = pd.read_csv(LMSAL_FILE)
+    lmsal["Start"] = pd.to_datetime(lmsal["Start"], errors="coerce")
+    lmsal = lmsal.dropna(subset=["Start"])
+    lmsal = lmsal[lmsal["GOES Class"].astype(str).str[0].str.upper().apply(_class_is_mx)]
+    return lmsal
+
+def assign_gt(pred_df, lmsal_df):
+    flare_starts = lmsal_df["Start"].values
+    gt = []
+    for _, row in pred_df.iterrows():
+        ws = np.datetime64(row["image_time"])
+        we = np.datetime64(row["forecast_end"])
+        gt.append(1 if ((flare_starts >= ws) & (flare_starts <= we)).any() else 0)
+    pred_df = pred_df.copy()
+    pred_df["gt_label"] = gt
+    return pred_df
+
+def compute_skill(subset):
+    hp = subset["probability"] >= 0.5
+    mx = subset["gt_label"] == 1
+    TP = int(( hp &  mx).sum())
+    FP = int(( hp & ~mx).sum())
+    FN = int((~hp &  mx).sum())
+    TN = int((~hp & ~mx).sum())
+    pod   = TP / (TP + FN) if (TP + FN) else 0
+    far   = FP / (FP + TN) if (FP + TN) else 0
+    tss   = pod - far
+    P     = TP + FN
+    N     = TN + FP
+    denom = (P * (FN + TN)) + ((TP + FP) * N)
+    hss   = (2 * (TP * TN - FN * FP) / denom) if denom else 0
+    return round(tss, 4), round(hss, 4)
 
 def goes_badge_html(cls: str) -> str:
     cls = (cls or "").strip()
@@ -252,7 +313,6 @@ def goes_badge_html(cls: str) -> str:
     letter = cls[0].upper()
     css = {"X": "goes-X", "M": "goes-M", "C": "goes-C", "B": "goes-B", "A": "goes-A"}.get(letter, "goes-B")
     return f'<span class="goes-badge {css}">{cls}</span>'
-
 # ── Two-column layout ──────────────────────────────────────────────────────
 left, right = st.columns([1.3, 1], gap="large")
 
@@ -296,12 +356,13 @@ with left:
     </div>
     """, unsafe_allow_html=True)
 
+    # Solar image
     st.markdown('<div class="sec-label" style="margin-top:16px;">Latest Solar Image</div>',
                 unsafe_allow_html=True)
     image_path = latest.get("image_path", "")
     if image_path and Path(str(image_path)).exists():
         image = Image.open(str(image_path))
-        st.image(image, width="stretch")
+        st.image(image,  width="content")
     else:
         st.markdown("""
         <div style="background:#000;border-radius:10px;
@@ -323,9 +384,9 @@ with right:
     items_html = []
     for _, row in board_df.iterrows():
         f        = is_flare(row["prediction_label"])
-        icon_cls = "fi-icon f"   if f else "fi-icon nf"
-        lbl_cls  = "fi-label-f"  if f else "fi-label-nf"
-        prb_cls  = "fi-prob-f"   if f else "fi-prob-nf"
+        icon_cls = "fi-icon f"    if f else "fi-icon nf"
+        lbl_cls  = "fi-label-f"   if f else "fi-label-nf"
+        prb_cls  = "fi-prob-f"    if f else "fi-prob-nf"
         icon     = "🔥" if f else "✅"
         text     = "Yes Flare" if f else "No Flare"
         pct_r    = fmt_prob(row["probability"])
@@ -344,9 +405,74 @@ with right:
 
     st.markdown("".join(items_html), unsafe_allow_html=True)
 
+    # ════════════════════════════════════════════════════════════════
+# BOTTOM — Recent prediction history (custom styled table)
 # ════════════════════════════════════════════════════════════════
-# BOTTOM — Recent prediction history
-# ════════════════════════════════════════════════════════════════
+# -- Model skill scores table -------------------------------------------------
+st.markdown(
+    '<div class="sec-label" style="margin-top:28px;">Model Skill Scores &nbsp;·&nbsp; M/X class &nbsp;·&nbsp; prob &ge; 0.5</div>',
+    unsafe_allow_html=True
+)
+_lmsal = load_lmsal()
+if _lmsal is None:
+    st.markdown(
+        '<p style="font-size:11px;color:rgba(232,228,216,0.3);'
+        'font-family:Space Mono,monospace">lmsal_all_2026_clean.csv not found.</p>',
+        unsafe_allow_html=True
+    )
+else:
+    _edf = df.drop_duplicates(subset="image_time").copy()
+    _edf["probability"] = pd.to_numeric(_edf["probability"], errors="coerce")
+    _edf = assign_gt(_edf, _lmsal)
+    _anchor = _edf["image_time"].max()
+    _wins = [
+        ("Last 1 Week",  _anchor - pd.Timedelta(weeks=1)),
+        ("Last 1 Month", _anchor - pd.Timedelta(days=30)),
+        ("From 01 Feb 26", _anchor - pd.Timedelta(days=85)),
+    ]
+    _skill_rows = []
+    for _lbl, _since in _wins:
+        _sub = _edf[_edf["image_time"] >= _since]
+        if _sub.empty or _sub["gt_label"].sum() == 0:
+            _skill_rows.append((_lbl, "N/A", "N/A"))
+        else:
+            _t, _h = compute_skill(_sub)
+            _skill_rows.append((_lbl, f"{_t:+.4f}", f"{_h:+.4f}"))
+
+    _th = (
+        "font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.16em;"
+        "text-transform:uppercase;color:rgba(232,228,216,0.25);font-weight:400;"
+        "padding:0 24px 10px 0;text-align:left;border-bottom:1px solid rgba(255,255,255,0.06);"
+    )
+    _td_base = (
+        "font-family:'Space Mono',monospace;font-size:11px;"
+        "color:rgba(232,228,216,0.6);padding:9px 24px 9px 0;"
+        "border-bottom:1px solid rgba(255,255,255,0.04);"
+    )
+    _td_val = (
+        "font-family:'Space Mono',monospace;font-size:13px;font-weight:700;"
+        "color:#c67bff;padding:9px 24px 9px 0;border-bottom:1px solid rgba(255,255,255,0.04);"
+    )
+    _tbody = "".join(
+        f'<tr><td style="{_td_base}">{r[0]}</td>'
+        f'<td style="{_td_val}">{r[1]}</td>'
+        f'<td style="{_td_val}">{r[2]}</td></tr>'
+        for r in _skill_rows
+    )
+    st.markdown(
+        f'''<div style="background:rgba(198,123,255,0.05);border:1px solid rgba(198,123,255,0.15);
+border-radius:10px;padding:16px 22px;margin-bottom:20px;">
+<table style="width:100%;border-collapse:collapse;">
+<thead><tr>
+<th style="{_th}">Period</th>
+<th style="{_th}">TSS</th>
+<th style="{_th}">HSS</th>
+</tr></thead>
+<tbody>{_tbody}</tbody>
+</table></div>''',
+        unsafe_allow_html=True
+    )
+
 st.markdown('<div class="sec-label" style="margin-top:28px;">Recent Prediction History</div>',
             unsafe_allow_html=True)
 
@@ -384,6 +510,7 @@ st.markdown(f"""
 </table>
 </div>
 """, unsafe_allow_html=True)
+
 
 # ════════════════════════════════════════════════════════════════
 # GOES FLARE DATA — from lmsal_all_2026_clean.csv (scrape_ssw.py)
@@ -477,3 +604,5 @@ st.markdown(
     f'padding:0 2rem 1rem 0;">next refresh in {mins:02d}:{secs:02d}</p>',
     unsafe_allow_html=True,
 )
+
+st.markdown('</div>', unsafe_allow_html=True)  # close .page-content

@@ -50,7 +50,7 @@ for jpg_path in Path("./data/hmi_jpg/").rglob("*.jpg"):
             probs = torch.softmax(output, dim=1)
             pred = torch.argmax(probs, dim=1).item()
 
-        probability = probs[0, pred].item()
+        probability = probs[0, 1].item()
         prediction_label = "Flare" if pred == 1 else "No Flare"
 
         # fix: parse time from filename; fall back to mtime only if parse fails
