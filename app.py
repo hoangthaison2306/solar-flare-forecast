@@ -473,6 +473,149 @@ border-radius:10px;padding:16px 22px;margin-bottom:20px;">
         unsafe_allow_html=True
     )
 
+# -- Confusion Matrix ----------------------------------------------------------
+st.markdown(
+    '<div class="sec-label" style="margin-top:28px;">Confusion Matrix &nbsp;·&nbsp; M/X class &nbsp;·&nbsp; prob &ge; 0.5 &nbsp;·&nbsp; all data</div>',
+    unsafe_allow_html=True
+)
+if _lmsal is None:
+    st.markdown(
+        '<p style="font-size:11px;color:rgba(232,228,216,0.3);'
+        'font-family:Space Mono,monospace">lmsal_all_2026_clean.csv not found.</p>',
+        unsafe_allow_html=True
+    )
+else:
+    _cm_df = df.drop_duplicates(subset="image_time").copy()
+    _cm_df["probability"] = pd.to_numeric(_cm_df["probability"], errors="coerce")
+    _cm_df = assign_gt(_cm_df, _lmsal)
+
+    _hp = _cm_df["probability"] >= 0.5
+    _mx = _cm_df["gt_label"] == 1
+    _TP = int(( _hp &  _mx).sum())
+    _FP = int(( _hp & ~_mx).sum())
+    _FN = int((~_hp &  _mx).sum())
+    _TN = int((~_hp & ~_mx).sum())
+    _N  = _TP + _FP + _FN + _TN
+
+    _pod  = _TP / (_TP + _FN) if (_TP + _FN) else 0
+    _far  = _FP / (_FP + _TN) if (_FP + _TN) else 0
+    _tss  = _pod - _far
+    _P    = _TP + _FN
+    _Nn   = _TN + _FP
+    _den  = (_P * (_FN + _TN)) + ((_TP + _FP) * _Nn)
+    _hss  = (2 * (_TP * _TN - _FN * _FP) / _den) if _den else 0
+
+    # cell styles
+    _cell_base = (
+        "text-align:center;padding:16px 10px;border-radius:8px;"
+        "font-family:'Space Mono',monospace;"
+    )
+    _tp_style = _cell_base + "background:rgba(30,180,80,0.12);border:1px solid rgba(30,180,80,0.30);"
+    _tn_style = _cell_base + "background:rgba(30,120,255,0.10);border:1px solid rgba(30,120,255,0.25);"
+    _fp_style = _cell_base + "background:rgba(255,60,60,0.10);border:1px solid rgba(255,60,60,0.25);"
+    _fn_style = _cell_base + "background:rgba(255,160,30,0.10);border:1px solid rgba(255,160,30,0.25);"
+
+    _lbl_style = "font-size:9px;letter-spacing:.14em;color:rgba(232,228,216,.28);text-transform:uppercase;margin-bottom:5px;"
+    _num_tp = "font-size:30px;font-weight:700;color:#44ee88;"
+    _num_tn = "font-size:30px;font-weight:700;color:#44aaff;"
+    _num_fp = "font-size:30px;font-weight:700;color:#ff5555;"
+    _num_fn = "font-size:30px;font-weight:700;color:#ffaa44;"
+    _pct_s  = "font-size:10px;color:rgba(232,228,216,.3);margin-top:3px;"
+
+    _axis_th = (
+        "font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.14em;"
+        "text-transform:uppercase;color:rgba(232,228,216,.22);font-weight:400;"
+        "text-align:center;padding:0 0 8px 0;"
+    )
+    _axis_td_v = (
+        "font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.12em;"
+        "text-transform:uppercase;color:rgba(232,228,216,.22);font-weight:400;"
+        "text-align:center;writing-mode:vertical-rl;transform:rotate(180deg);"
+        "padding-right:8px;white-space:nowrap;"
+    )
+
+    _metric_bar_style = (
+        "display:flex;gap:0;margin-top:14px;border-radius:8px;overflow:hidden;"
+        "border:1px solid rgba(255,255,255,0.06);"
+    )
+    _metric_item = (
+        "flex:1;text-align:center;padding:10px 6px;"
+        "background:rgba(255,255,255,0.02);font-family:'Space Mono',monospace;"
+        "border-right:1px solid rgba(255,255,255,0.05);"
+    )
+    _metric_last = (
+        "flex:1;text-align:center;padding:10px 6px;"
+        "background:rgba(255,255,255,0.02);font-family:'Space Mono',monospace;"
+    )
+    _metric_lbl = "font-size:8px;letter-spacing:.14em;color:rgba(232,228,216,.24);text-transform:uppercase;margin-bottom:4px;"
+    _metric_val = "font-size:13px;font-weight:700;color:#c67bff;"
+
+    st.markdown(f"""
+<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);
+border-radius:10px;padding:20px 22px 16px;margin-bottom:20px;">
+
+<table style="width:100%;border-collapse:separate;border-spacing:6px;">
+  <thead>
+    <tr>
+      <th style="width:60px;"></th>
+      <th style="{_axis_th}">Predicted Flare</th>
+      <th style="{_axis_th}">Predicted No Flare</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="{_axis_td_v}">Actual Flare</td>
+      <td style="{_tp_style}">
+        <div style="{_lbl_style}">True Positive</div>
+        <div style="{_num_tp}">{_TP}</div>
+        <div style="{_pct_s}">{_TP/_N*100:.1f}%</div>
+      </td>
+      <td style="{_fn_style}">
+        <div style="{_lbl_style}">False Negative</div>
+        <div style="{_num_fn}">{_FN}</div>
+        <div style="{_pct_s}">{_FN/_N*100:.1f}%</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="{_axis_td_v}">Actual No Flare</td>
+      <td style="{_fp_style}">
+        <div style="{_lbl_style}">False Positive</div>
+        <div style="{_num_fp}">{_FP}</div>
+        <div style="{_pct_s}">{_FP/_N*100:.1f}%</div>
+      </td>
+      <td style="{_tn_style}">
+        <div style="{_lbl_style}">True Negative</div>
+        <div style="{_num_tn}">{_TN}</div>
+        <div style="{_pct_s}">{_TN/_N*100:.1f}%</div>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<div style="{_metric_bar_style}">
+  <div style="{_metric_item}">
+    <div style="{_metric_lbl}">POD</div>
+    <div style="{_metric_val}">{_pod:.4f}</div>
+  </div>
+  <div style="{_metric_item}">
+    <div style="{_metric_lbl}">FAR</div>
+    <div style="{_metric_val}">{_far:.4f}</div>
+  </div>
+  <div style="{_metric_item}">
+    <div style="{_metric_lbl}">TSS</div>
+    <div style="{_metric_val}">{_tss:+.4f}</div>
+  </div>
+  <div style="{_metric_last}">
+    <div style="{_metric_lbl}">HSS</div>
+    <div style="{_metric_val}">{_hss:+.4f}</div>
+  </div>
+</div>
+<p style="font-size:9px;color:rgba(232,228,216,.18);font-family:'Space Mono',monospace;margin-top:10px;margin-bottom:0;">
+  n={_N} predictions &nbsp;·&nbsp; {_TP+_FN} M/X flare windows &nbsp;·&nbsp; threshold prob &ge; 0.5
+</p>
+</div>
+""", unsafe_allow_html=True)
+
 st.markdown('<div class="sec-label" style="margin-top:28px;">Recent Prediction History</div>',
             unsafe_allow_html=True)
 

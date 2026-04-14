@@ -109,7 +109,7 @@ def main():
     windows = [
         ("Last 1 Week",  now - pd.Timedelta(weeks=1)),
         ("Last 1 Month", now - pd.Timedelta(days=30)),
-        ("Last 2 Months", now - pd.Timedelta(days=60))
+        ("Last 2 Months", now - pd.Timedelta(days=85))
     ]
 
     rows = []
