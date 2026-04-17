@@ -33,9 +33,7 @@ solar-flare-forecast/
 
 ## System Pipeline
 
-```
 ![How files are connected and works](static/file_diagram.png)
-```
 
 ---
 
