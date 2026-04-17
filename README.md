@@ -83,7 +83,7 @@ cd solar-flare-forecast
 
 ```bash
 pip install -r requirements.txt
-> ```
+ ```
 
 ### 3. Add the model weights
 
