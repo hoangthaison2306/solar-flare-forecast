@@ -26,7 +26,8 @@ solar-flare-forecast/
 └── README.md
 ```
 
-> **Note:** The `data/` directory (HMI images) and `new-fold1.pth` (model weights) are not tracked by git. See setup instructions below.
+> **Note:** collect_latest.py and predict_latest.py are mainly used for test and retrieve newest detected image and predictions.
+> The `data/` directory (HMI images) and `new-fold1.pth` (model weights) are not tracked by git. See setup instructions below.
 
 ---
 
