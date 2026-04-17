@@ -1,33 +1,28 @@
-# ☀️ TCU Solar Flare Forecast
+# Operational Verification of Deep Learning–Based Solar Flare Forecasts
 
-A real-time solar flare prediction system built at **Texas Christian University**. It downloads HMI magnetogram images from the Helioviewer API every hour, classifies them with a custom AlexNet-based deep learning model, and displays live M/X-class flare forecasts in a Streamlit dashboard — validated against official GOES event data from LMSAL.
+A real-time solar flare prediction system I built with Professor Chetraj Pandey and Professor Robin Chataut at **Texas Christian University**. It downloads HMI magnetogram images from the Helioviewer API every hour, classifies them with a custom AlexNet-based deep learning model, and displays live flare-class forecasts with respective probability in a Streamlit dashboard.
 
 ---
 
-## 🗂️ Repository Structure
+## Repository Structure
 
 ```
 solar-flare-forecast/
 │
-├── app.py                     # Streamlit dashboard (main UI)
-│
-├── collect_data.py            # Bulk historical download: Helioviewer JP2 → JPG (Feb 2026 onward)
-├── collect_latest.py          # Hourly download of the single latest HMI image
-│
-├── predict.py                 # Batch inference over all images in data/hmi_jpg/
-├── predict_latest.py          # Incremental inference: predicts only the newest image
-│
-├── scrape_ssw.py              # Scrapes LMSAL/SolarSoft for GOES flare event data
-├── scheduler.py               # Runs scrape_ssw.py on a 60-minute loop
-│
-├── eval.py                    # Evaluates TSS / HSS against M/X-class ground truth
-│
-├── lmsal_all_2026_clean.csv   # Ground-truth GOES flare events (auto-updated by scrape_ssw.py)
-├── prediction_history.csv     # Running log of model predictions (auto-updated)
-├── evaluation_results.csv     # Saved evaluation metrics
-├── confusion_matrix.png       # Confusion matrix from offline evaluation
-│
+├── app.py                 # Streamlit dashboard
+├── style.css              # UI styling
+├── collect_data.py        # Data ingestion pipeline
+├── collect_latest.py      # latest image fetch
+├── scrape_ssw.py          # LMSAL flare data scraper
+├── predict.py             # Predictions for all images
+├── predict_latest.py      # Prediction for latest image
+├── eval.py                # Model evaluation (TSS, HSS score)
+├── scheduler.py           # Hourly automation for scrape_ssw.py, collect_data.py, and predict.py
+├── prediction_history.csv # Stored predictions
+├── lmsal_all_2026_clean.csv # Real flare data
+└── new-fold1.pth          # Trained model weights
 ├── .gitignore
+├── requirements.txt
 └── README.md
 ```
 
@@ -41,13 +36,13 @@ solar-flare-forecast/
 [Helioviewer API]
        │
        ▼
-collect_latest.py          ← runs every hour (via cron or manually)
+collect_latest.py          ← runs every hour
        │  downloads latest HMI magnetogram JP2 → converts to JPG
        ▼
 data/hmi_jpg/latest_jpg/
        │
        ▼
-predict_latest.py          ← runs every hour
+predict.py          ← runs every hour
        │  loads new-fold1.pth, runs AlexNet inference
        ▼
 prediction_history.csv
@@ -65,6 +60,12 @@ scrape_ssw.py              ← runs every hour via scheduler.py
        │
        ▼
 lmsal_all_2026_clean.csv   ← ground truth for eval.py + app.py skill scores
+       │
+       ▼
+eval.py                    ← run TSS/HSS scores to evaluate model
+       │
+       ▼
+app.py
 ```
 
 ---
@@ -81,22 +82,17 @@ cd solar-flare-forecast
 ### 2. Install dependencies
 
 ```bash
-pip install streamlit pandas numpy torch torchvision pillow opencv-python requests beautifulsoup4 schedule
-```
-
-> OpenCV must be built with OpenJPEG support to decode `.jp2` files. The easiest install:
-> ```bash
-> pip install opencv-python-headless
+pip install -r requirements.txt
 > ```
 
 ### 3. Add the model weights
 
 Place `new-fold1.pth` in the project root. This file is not tracked by git due to its size.
 
-The model uses `Custom_AlexNet` from the [`explainingFullDisk`](https://github.com/SpaceML-org/ExplainingFullDiskSolarFlares) package. Install or clone it so the import resolves:
+The model uses `Custom_AlexNet` from the [`explainingFullDisk`](https://github.com/chetrajpandey/explainingFullDisk) package. Install or clone it so the import resolves:
 
 ```bash
-git clone https://github.com/SpaceML-org/ExplainingFullDiskSolarFlares.git explainingFullDisk
+git clone https://github.com/chetrajpandey/explainingFullDisk.git explainingFullDisk
 ```
 
 ### 4. Download historical images (optional, for bulk evaluation)
@@ -119,35 +115,22 @@ python scheduler.py
 
 Runs `scrape_ssw.py` immediately on startup, then every 60 minutes. Keeps `lmsal_all_2026_clean.csv` up to date.
 
-### Fetch the latest solar image + run inference (run hourly, e.g. via cron)
+### Run predictions for all historical images
+
+```bash
+python predict.py
+```
+### Fetch the latest solar image + run inference
 
 ```bash
 python collect_latest.py
 python predict_latest.py
 ```
-
-Or to batch-predict all historical images at once:
-
-```bash
-python predict.py
-```
-
-### Launch the dashboard
-
-```bash
-streamlit run app.py
-```
-
----
-
-## 📊 Evaluation
-
+### Evaluation
 Compute TSS and HSS against M/X-class GOES ground truth:
-
 ```bash
 python eval.py
 ```
-
 Example output:
 
 ```
@@ -157,7 +140,6 @@ Last 1 Week   +0.XXXX  +0.XXXX
 Last 1 Month  +0.XXXX  +0.XXXX
 Last 2 Months +0.XXXX  +0.XXXX
 ```
-
 **Metric definitions (threshold: probability ≥ 0.5):**
 - **TSS** (True Skill Statistic) = POD − FAR. Range [−1, 1]; 0 = no skill.
 - **HSS** (Heidke Skill Score) = skill relative to random chance. Range (−∞, 1]; 1 = perfect.
@@ -165,13 +147,18 @@ Last 2 Months +0.XXXX  +0.XXXX
 A prediction is a **true positive** if any M or X-class flare starts between `image_time` and `forecast_end` (image time + 12 hours).
 
 ---
+### Launch the dashboard
 
+```bash
+streamlit run app.py
+```
+---
 ## 🛰️ Data Sources
 
 | Source | Description |
 |--------|-------------|
 | [Helioviewer API](https://helioviewer.org) | HMI Line-of-Sight Magnetogram images (sourceId=19), JP2 format |
-| [LMSAL / SolarSoft](https://www.lmsal.com/solarsoft/) | GOES flare event catalog, scraped hourly |
+| [LMSAL / SolarSoft](https://www.lmsal.com/solarsoft/latest_events_archive.html) | GOES flare event catalog |
 
 ---
 
@@ -195,7 +182,7 @@ __pycache__/
 
 ---
 
-## 🏫 Affiliation
+## References
 
 Developed at **Texas Christian University (TCU)**.  
-Model architecture based on the [ExplainingFullDisk](https://github.com/SpaceML-org/ExplainingFullDiskSolarFlares) solar flare forecasting framework.
+Model architecture based on the [ExplainingFullDisk](https://github.com/chetrajpandey/explainingFullDisk) solar flare forecasting framework.
