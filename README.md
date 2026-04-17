@@ -30,7 +30,7 @@ solar-flare-forecast/
 
 ---
 
-## 🔄 System Pipeline
+## System Pipeline
 
 ```
 [Helioviewer API]
@@ -70,7 +70,7 @@ app.py
 
 ---
 
-## 🚀 Setup
+## Setup
 
 ### 1. Clone the repo
 
@@ -105,7 +105,7 @@ Downloads hourly HMI magnetograms from Feb 1, 2026 onward and converts them to J
 
 ---
 
-## ▶️ Running the System
+## Running the System
 
 ### Start the LMSAL scraper (keep running in background)
 
@@ -153,7 +153,7 @@ A prediction is a **true positive** if any M or X-class flare starts between `im
 streamlit run app.py
 ```
 ---
-## 🛰️ Data Sources
+## Data Sources
 
 | Source | Description |
 |--------|-------------|
@@ -162,7 +162,7 @@ streamlit run app.py
 
 ---
 
-## 📁 What's Not in This Repo
+## What's Not in This Repo
 
 | Path | Why excluded |
 |------|--------------|
