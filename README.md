@@ -34,39 +34,7 @@ solar-flare-forecast/
 ## System Pipeline
 
 ```
-[Helioviewer API]
-       │
-       ▼
-collect_latest.py          ← runs every hour
-       │  downloads latest HMI magnetogram JP2 → converts to JPG
-       ▼
-data/hmi_jpg/latest_jpg/
-       │
-       ▼
-predict.py          ← runs every hour
-       │  loads new-fold1.pth, runs AlexNet inference
-       ▼
-prediction_history.csv
-       │
-       ▼
-app.py                     ← Streamlit dashboard reads this file
-       │  displays forecast, history, skill scores
-       ▼
-[Browser]
-
-[LMSAL/SolarSoft]
-       │
-       ▼
-scrape_ssw.py              ← runs every hour via scheduler.py
-       │
-       ▼
-lmsal_all_2026_clean.csv   ← ground truth for eval.py + app.py skill scores
-       │
-       ▼
-eval.py                    ← run TSS/HSS scores to evaluate model
-       │
-       ▼
-app.py
+![How files are connected and works](static/file_diagram.png)
 ```
 
 ---
