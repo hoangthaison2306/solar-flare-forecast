@@ -92,7 +92,7 @@ Place `new-fold1.pth` in the project root. This file is not tracked by git due t
 The model uses `Custom_AlexNet` from the [`explainingFullDisk`](https://github.com/chetrajpandey/explainingFullDisk) package. Install or clone it so the import resolves:
 
 ```bash
-git clone https://github.com/chetrajpandey/explainingFullDisk.git explainingFullDisk
+git clone https://github.com/chetrajpandey/explainingFullDisk.git
 ```
 
 ### 4. Download historical images (optional, for bulk evaluation)
