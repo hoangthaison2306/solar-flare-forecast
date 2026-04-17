@@ -1,0 +1,12 @@
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "viewer"   # shows the toolbar including the theme toggle button
+
+[theme]
+base = "dark"            # default to dark on first load
+font = "sans serif"
+
+[server]
+enableStaticServing = true

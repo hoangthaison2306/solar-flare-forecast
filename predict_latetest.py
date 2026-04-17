@@ -119,7 +119,7 @@ label, confidence = predict_image(latest_image)
 new_row = pd.DataFrame([{
     "prediction_time":  datetime.now().isoformat(),
     "image_time":       image_time.isoformat(),
-    "forecast_end":     (image_time + timedelta(hours=12)).isoformat(),
+    "forecast_end":     (image_time + timedelta(hours=24)).isoformat(),
     "prediction_label": label,
     "probability":      confidence,
     "image_path":       str(latest_image),

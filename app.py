@@ -3,214 +3,100 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from PIL import Image
-from datetime import timedelta
+import time as _time
+from textwrap import dedent
 
 # ── Must be first ──────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="TCU Solar Flare Forecast",
-    page_icon="☀️",
+    page_icon="eclipse_icon_128.png",
     layout="wide",
 )
 
-# ── CSS ────────────────────────────────────────────────────────────────────
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+if "theme" not in st.session_state:
+    st.session_state["theme"] = "dark"
 
-/* ── Global reset ── */
-html, body, [data-testid="stApp"] {
-    background-color: #05050f !important;
-    color: #e8e4d8 !important;
-    font-family: 'DM Sans', sans-serif !important;
-}
-[data-testid="stHeader"]    { background: transparent !important; }
-[data-testid="stDecoration"]{ display: none !important; }
-#MainMenu, footer           { visibility: hidden; }
+# ── Load external CSS ──────────────────────────────────────────────────────
+_LIGHT_ROOT_VARS = """
+--bg:#edf4fb;
+--bg2:#f8fbff;
+--bg3:rgba(255,255,255,0.96);
+--text:#081a2f;
+--text-dim:rgba(8,26,47,0.82);
+--text-faint:rgba(8,26,47,0.58);
+--border:rgba(8,26,47,0.14);
+--border-dim:rgba(8,26,47,0.08);
+--card-bg:rgba(255,255,255,0.98);
+--banner-border:rgba(11,91,160,0.20);
+--meta-bg:rgba(244,248,253,0.98);
+--meta-border:rgba(8,26,47,0.10);
+--hover-bg:rgba(11,91,160,0.06);
+--skill-bg:rgba(230,241,252,0.96);
+--skill-border:rgba(11,91,160,0.18);
+--bar-track:rgba(8,26,47,0.10);
+--placeholder-bg:#e7f0f9;
+--placeholder-border:rgba(8,26,47,0.10);
+--metric-bg:rgba(245,249,255,0.98);
+--metric-border:rgba(8,26,47,0.10);
+--metric-div:rgba(8,26,47,0.07);
+--footer-color:rgba(8,26,47,0.42);
+--shadow-soft:0 8px 24px rgba(18,52,86,0.08);
+--shadow-card:0 12px 30px rgba(18,52,86,0.10);
+--glow:0 0 0 1px rgba(11,91,160,0.05);
+"""
 
-.block-container {
-    padding-top: 0 !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    max-width: 100% !important;
-}
-[data-testid="stAppViewContainer"] > .main {
-    padding-top: 0 !important;
-    margin-top: 0 !important;
-}
+_DARK_ROOT_VARS = """
+--bg:#05050f;
+--bg2:#0b0b1e;
+--bg3:rgba(255,255,255,0.02);
+--text:#f4f7fb;
+--text-dim:rgba(244,247,251,0.82);
+--text-faint:rgba(244,247,251,0.58);
+--border:rgba(255,255,255,0.10);
+--border-dim:rgba(255,255,255,0.06);
+--card-bg:rgba(255,255,255,0.03);
+--banner-border:rgba(198,123,255,0.20);
+--meta-bg:rgba(255,255,255,0.03);
+--meta-border:rgba(255,255,255,0.07);
+--hover-bg:rgba(255,255,255,0.03);
+--skill-bg:rgba(198,123,255,0.05);
+--skill-border:rgba(198,123,255,0.15);
+--bar-track:rgba(255,255,255,0.07);
+--placeholder-bg:#000;
+--placeholder-border:rgba(255,255,255,0.07);
+--metric-bg:rgba(255,255,255,0.02);
+--metric-border:rgba(255,255,255,0.06);
+--metric-div:rgba(255,255,255,0.05);
+--footer-color:rgba(244,247,251,0.42);
+--shadow-soft:0 10px 30px rgba(0,0,0,0.22);
+--shadow-card:0 12px 36px rgba(0,0,0,0.18);
+--glow:0 0 0 1px rgba(198,123,255,0.08);
+"""
 
-/* ── TCU top bar ── */
-.tcu-banner {
-    width: 100%;
-    height: 56px;
-    background: #0b0b1e;
-    border-bottom: 1px solid rgba(255,120,50,0.22);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 32px;
-    box-sizing: border-box;
-    margin-top: 58px;
-}
-.tcu-left  { display:flex; align-items:center; gap:14px; }
-.tcu-badge {
-    font-family: 'Space Mono', monospace;
-    font-size: 11px; font-weight: 700;
-    letter-spacing: 0.14em; color: #c67bff;
-    border: 1px solid rgba(198,123,255,0.4);
-    padding: 3px 9px; border-radius: 2px;
-}
-.tcu-name  { font-size:13px; color:rgba(232,228,216,0.38); letter-spacing:.07em; font-weight:300; }
-.live-badge {
-    display:flex; align-items:center; gap:7px;
-    font-family:'Space Mono',monospace;
-    font-size:10px; color:#ff7a32; letter-spacing:.1em;
-}
-.live-dot {
-    width:7px; height:7px; border-radius:50%;
-    background:#ff7a32;
-    animation: livepulse 1.4s ease-in-out infinite;
-}
-@keyframes livepulse {
-    0%,100%{ opacity:1; transform:scale(1); }
-    50%    { opacity:.3; transform:scale(.6); }
-}
+def load_css(file_name: str = "style.css") -> None:
+    css_path = Path(file_name)
+    if not css_path.exists():
+        st.warning(f"{file_name} not found. UI will render without custom styling.")
+        return
 
-/* ── Page padding ── */
-.page-content { padding: 1.5rem 2rem 0 2rem; }
+    css = css_path.read_text(encoding="utf-8")
+    theme = st.session_state.get("theme", "dark")
+    root_vars = _LIGHT_ROOT_VARS if theme == "light" else _DARK_ROOT_VARS
 
-/* ── Section labels ── */
-.sec-label {
-    font-family:'Space Mono',monospace;
-    font-size:9px; letter-spacing:.2em;
-    color:rgba(232,228,216,.28);
-    text-transform:uppercase; margin-bottom:10px;
-}
+    st.markdown(
+        dedent(f"""
+        <style>
+        {css}
 
-/* ── Alert card ── */
-.alert-card {
-    background: linear-gradient(135deg,rgba(255,80,30,.11) 0%,rgba(255,140,60,.04) 100%);
-    border: 1px solid rgba(255,90,30,.32);
-    border-radius: 10px;
-    padding: 20px 22px 18px;
-    position: relative; overflow: hidden;
-    margin-bottom: 14px;
-}
-.alert-card::before {
-    content:''; position:absolute;
-    left:0; top:0; bottom:0; width:3px;
-    background:linear-gradient(180deg,#ff5a1e,#ffaa44);
-}
-.alert-card.no-flare {
-    background:linear-gradient(135deg,rgba(30,160,255,.09) 0%,rgba(60,200,255,.03) 100%);
-    border-color:rgba(30,140,255,.28);
-}
-.alert-card.no-flare::before {
-    background:linear-gradient(180deg,#1e8aff,#44ccff);
-}
-.alert-eyebrow {
-    font-family:'Space Mono',monospace;
-    font-size:9px; letter-spacing:.22em; color:#ff7a40; margin-bottom:5px;
-}
-.alert-card.no-flare .alert-eyebrow { color:#44aaff; }
-.alert-title {
-    font-size:26px; font-weight:600;
-    color:#fff5ee; line-height:1.15; margin-bottom:14px;
-}
-.conf-row {
-    display:flex; justify-content:space-between;
-    align-items:center; margin-bottom:5px;
-}
-.conf-label { font-size:11px; color:rgba(232,228,216,.42); font-weight:300; }
-.conf-val-flare   { font-family:'Space Mono',monospace; font-size:14px; font-weight:700; color:#ffaa44; }
-.conf-val-noflare { font-family:'Space Mono',monospace; font-size:14px; font-weight:700; color:#44aaff; }
-.bar-track { height:4px; background:rgba(255,255,255,.07); border-radius:2px; overflow:hidden; margin-bottom:14px; }
-.bar-flare   { height:100%; background:linear-gradient(90deg,#ff5a1e,#ffcc44); border-radius:2px; }
-.bar-noflare { height:100%; background:linear-gradient(90deg,#1e6aff,#44ddff); border-radius:2px; }
-.meta-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.meta-cell {
-    background:rgba(255,255,255,.03);
-    border:1px solid rgba(255,255,255,.06);
-    border-radius:6px; padding:9px 12px;
-}
-.meta-cell-label { font-size:9px; letter-spacing:.12em; color:rgba(232,228,216,.26); text-transform:uppercase; margin-bottom:3px; }
-.meta-cell-val   { font-family:'Space Mono',monospace; font-size:11px; color:rgba(232,228,216,.7); line-height:1.5; }
+        :root {{
+            {root_vars}
+        }}
+        </style>
+        """),
+        unsafe_allow_html=True,
+    )
 
-/* ── Forecast items ── */
-.forecast-item {
-    display:flex; align-items:center; gap:13px;
-    padding:10px 14px;
-    border-bottom:1px solid rgba(255,255,255,.04);
-    border-radius:6px; margin-bottom:3px;
-    transition:background .15s;
-}
-.forecast-item:hover { background:rgba(255,255,255,.03); }
-.fi-icon {
-    width:34px; height:34px; border-radius:7px;
-    display:flex; align-items:center; justify-content:center;
-    flex-shrink:0; font-size:14px;
-}
-.fi-icon.f  { background:rgba(255,80,30,.12);  border:1px solid rgba(255,80,30,.28); }
-.fi-icon.nf { background:rgba(30,140,255,.10); border:1px solid rgba(30,140,255,.24); }
-.fi-body    { flex:1; min-width:0; }
-.fi-label-f  { font-size:13px; font-weight:500; color:#ffcba0; margin-bottom:2px; }
-.fi-label-nf { font-size:13px; font-weight:500; color:#aaddff; margin-bottom:2px; }
-.fi-time     { font-family:'Space Mono',monospace; font-size:9px; color:rgba(232,228,216,.26); letter-spacing:.05em; }
-.fi-prob-f   { font-family:'Space Mono',monospace; font-size:12px; color:#ff8844; font-weight:700; white-space:nowrap; }
-.fi-prob-nf  { font-family:'Space Mono',monospace; font-size:12px; color:#44aaff; font-weight:700; white-space:nowrap; }
-
-/* ── History table ── */
-.hist-wrap { overflow-x:auto; margin-top:8px; }
-.hist-table { width:100%; border-collapse:collapse; font-size:11px; }
-.hist-table th {
-    font-family:'Space Mono',monospace; font-size:8px;
-    letter-spacing:.14em; text-transform:uppercase;
-    color:rgba(232,228,216,.24); font-weight:400;
-    padding:0 8px 8px 0; text-align:left;
-    border-bottom:1px solid rgba(255,255,255,.06);
-}
-.hist-table td {
-    padding:7px 8px 7px 0;
-    font-family:'Space Mono',monospace; font-size:10px;
-    color:rgba(232,228,216,.52);
-    border-bottom:1px solid rgba(255,255,255,.03);
-}
-.lf  { color:#ffcba0 !important; }
-.lnf { color:#aaddff !important; }
-.pf  { color:#ff8844 !important; font-weight:700; }
-.pnf { color:#44aaff !important; font-weight:700; }
-
-.goes-wrap { overflow-x:auto; margin-top:8px; }
-.goes-table { width:100%; border-collapse:collapse; font-size:11px; }
-.goes-table th {
-    font-family:'Space Mono',monospace; font-size:8px;
-    letter-spacing:.14em; text-transform:uppercase;
-    color:rgba(232,228,216,.24); font-weight:400;
-    padding:0 8px 8px 0; text-align:left;
-    border-bottom:1px solid rgba(255,255,255,.06);
-}
-.goes-table td {
-    padding:7px 8px 7px 0;
-    font-family:'Space Mono',monospace; font-size:10px;
-    color:rgba(232,228,216,.52);
-    border-bottom:1px solid rgba(255,255,255,.03);
-}
-.goes-badge {
-    display:inline-block; padding:2px 7px; border-radius:3px;
-    font-family:'Space Mono',monospace; font-size:10px; font-weight:700;
-    letter-spacing:.04em;
-}
-.goes-X  { background:rgba(255,40,40,.18);  color:#ff6060; border:1px solid rgba(255,60,60,.35); }
-.goes-M  { background:rgba(255,130,30,.18); color:#ffaa44; border:1px solid rgba(255,130,30,.35); }
-.goes-C  { background:rgba(255,220,60,.14); color:#ffe066; border:1px solid rgba(255,220,60,.30); }
-.goes-B  { background:rgba(80,180,255,.12); color:#66ccff; border:1px solid rgba(80,180,255,.28); }
-.goes-A  { background:rgba(150,255,150,.10);color:#88ee88; border:1px solid rgba(150,255,150,.24); }
-.goes-none{ color:rgba(232,228,216,.18); font-style:italic; }
-
-h2, h3 { color:#e8e4d8 !important; font-family:'DM Sans',sans-serif !important; }
-[data-testid="stDataFrame"] { display:none !important; }
-</style>
-""", unsafe_allow_html=True)
-
+load_css()
 # ── Top bar ────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="tcu-banner">
@@ -218,14 +104,22 @@ st.markdown("""
         <span class="tcu-badge">TCU</span>
         <span class="tcu-name">Texas Christian University &nbsp;·&nbsp; Solar Flare Forecast</span>
     </div>
-    <div class="live-badge"><span class="live-dot"></span>LIVE</div>
+    <div class="tcu-right">
+        <div class="live-badge"><span class="live-dot"></span>LIVE</div>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="page-content">', unsafe_allow_html=True)
 
+if st.button("🌙 / ☀️", key="theme_toggle"):
+    st.session_state["theme"] = "light" if st.session_state["theme"] == "dark" else "dark"
+    st.rerun()
+
 # ── Load data ──────────────────────────────────────────────────────────────
 HISTORY_FILE = Path("prediction_history.csv")
+LMSAL_FILE = Path("lmsal_all_2026_clean.csv")
+SSW_FILE = LMSAL_FILE
 
 if not HISTORY_FILE.exists():
     st.warning("No prediction history found yet.")
@@ -233,17 +127,27 @@ if not HISTORY_FILE.exists():
 
 df = pd.read_csv(HISTORY_FILE)
 
-df["prediction_time"] = pd.to_datetime(df["prediction_time"], errors="coerce")
+df["prediction_time"] = pd.to_datetime(df.get("prediction_time"), errors="coerce")
 
 if "image_time" in df.columns:
     df["image_time"] = pd.to_datetime(df["image_time"], errors="coerce")
 else:
-    st.error("CSV is missing image_time. Run the new prediction pipeline first.")
+    st.error("CSV is missing image_time. Run the prediction pipeline first.")
     st.stop()
 
-df["forecast_end"] = pd.to_datetime(df["forecast_end"], errors="coerce")
+# Force true 24-hour forecast window in the app display/evaluation
+df["forecast_end"] = df["image_time"] + pd.Timedelta(hours=24)
+df["probability"] = pd.to_numeric(df.get("probability"), errors="coerce")
 
-df = df.dropna(subset=["image_time"]).sort_values("image_time", ascending=False).reset_index(drop=True)
+df = (
+    df.dropna(subset=["image_time"])
+      .sort_values("image_time", ascending=False)
+      .reset_index(drop=True)
+)
+
+if df.empty:
+    st.warning("Prediction history is empty.")
+    st.stop()
 
 latest = df.iloc[0]
 
@@ -255,18 +159,16 @@ board_df = (
 )
 
 # ── Helpers ────────────────────────────────────────────────────────────────
-def is_flare(label):
+def is_flare(label: str) -> bool:
     return str(label).strip().lower() in ["flare", "yes flare", "yes"]
 
-def fmt_prob(x):
-    return x * 100 if x <= 1.0 else x   # normalise to 0–100
+def fmt_prob(x) -> float:
+    if pd.isna(x):
+        return 0.0
+    return x * 100 if x <= 1.0 else x
 
-
-# -- Evaluation helpers --------------------------------------------------------
-LMSAL_FILE  = Path("lmsal_all_2026_clean.csv")
-
-def _class_is_mx(goes_class):
-    letter = str(goes_class).strip()[0].upper() if goes_class else "?"
+def _class_is_mx(goes_class: str) -> bool:
+    letter = str(goes_class).strip()[:1].upper() if goes_class else "?"
     return letter in ("M", "X")
 
 @st.cache_data
@@ -276,10 +178,12 @@ def load_lmsal():
     lmsal = pd.read_csv(LMSAL_FILE)
     lmsal["Start"] = pd.to_datetime(lmsal["Start"], errors="coerce")
     lmsal = lmsal.dropna(subset=["Start"])
-    lmsal = lmsal[lmsal["GOES Class"].astype(str).str[0].str.upper().apply(_class_is_mx)]
+    lmsal = lmsal[
+        lmsal["GOES Class"].astype(str).str[0].str.upper().apply(_class_is_mx)
+    ]
     return lmsal
 
-def assign_gt(pred_df, lmsal_df):
+def assign_gt(pred_df: pd.DataFrame, lmsal_df: pd.DataFrame) -> pd.DataFrame:
     flare_starts = lmsal_df["Start"].values
     gt = []
     for _, row in pred_df.iterrows():
@@ -290,20 +194,24 @@ def assign_gt(pred_df, lmsal_df):
     pred_df["gt_label"] = gt
     return pred_df
 
-def compute_skill(subset):
+def compute_skill(subset: pd.DataFrame):
     hp = subset["probability"] >= 0.5
     mx = subset["gt_label"] == 1
+
     TP = int(( hp &  mx).sum())
     FP = int(( hp & ~mx).sum())
     FN = int((~hp &  mx).sum())
     TN = int((~hp & ~mx).sum())
-    pod   = TP / (TP + FN) if (TP + FN) else 0
-    far   = FP / (FP + TN) if (FP + TN) else 0
-    tss   = pod - far
-    P     = TP + FN
-    N     = TN + FP
+
+    pod = TP / (TP + FN) if (TP + FN) else 0
+    far = FP / (FP + TN) if (FP + TN) else 0
+    tss = pod - far
+
+    P = TP + FN
+    N = TN + FP
     denom = (P * (FN + TN)) + ((TP + FP) * N)
-    hss   = (2 * (TP * TN - FN * FP) / denom) if denom else 0
+    hss = (2 * (TP * TN - FN * FP) / denom) if denom else 0
+
     return round(tss, 4), round(hss, 4)
 
 def goes_badge_html(cls: str) -> str:
@@ -311,8 +219,24 @@ def goes_badge_html(cls: str) -> str:
     if not cls:
         return '<span class="goes-none">—</span>'
     letter = cls[0].upper()
-    css = {"X": "goes-X", "M": "goes-M", "C": "goes-C", "B": "goes-B", "A": "goes-A"}.get(letter, "goes-B")
+    css = {
+        "X": "goes-X",
+        "M": "goes-M",
+        "C": "goes-C",
+        "B": "goes-B",
+        "A": "goes-A",
+    }.get(letter, "goes-B")
     return f'<span class="goes-badge {css}">{cls}</span>'
+
+@st.cache_data(ttl=3600)
+def load_ssw_flares(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame(columns=["Start", "GOES Class", "Class_Type"])
+    df_ssw = pd.read_csv(path)
+    df_ssw["Start"] = pd.to_datetime(df_ssw["Start"], errors="coerce")
+    df_ssw = df_ssw.dropna(subset=["Start"]).sort_values("Start").reset_index(drop=True)
+    return df_ssw
+
 # ── Two-column layout ──────────────────────────────────────────────────────
 left, right = st.columns([1.3, 1], gap="large")
 
@@ -322,15 +246,15 @@ left, right = st.columns([1.3, 1], gap="large")
 with left:
     st.markdown('<div class="sec-label">Latest Prediction</div>', unsafe_allow_html=True)
 
-    flare       = is_flare(latest["prediction_label"])
-    pct         = fmt_prob(latest["probability"])
-    card_cls    = "alert-card" if flare else "alert-card no-flare"
-    eyebrow     = "FLARE ALERT" if flare else "NO FLARE DETECTED"
-    title_txt   = "Solar Flare Predicted" if flare else "No Solar Flare"
-    bar_cls     = "bar-flare" if flare else "bar-noflare"
-    conf_cls    = "conf-val-flare" if flare else "conf-val-noflare"
+    flare = is_flare(latest["prediction_label"])
+    pct = fmt_prob(latest["probability"])
+    card_cls = "alert-card" if flare else "alert-card no-flare"
+    eyebrow = "PROBABILITY OF FLARE PREDICTION"
+    title_txt = "Flare detected" if flare else "No flare detected"
+    bar_cls = "bar-flare" if flare else "bar-noflare"
+    conf_cls = "conf-val-flare" if flare else "conf-val-noflare"
     pred_time_s = latest["image_time"].strftime("%Y-%m-%d %H:%M")
-    end_time_s  = latest["forecast_end"].strftime("%Y-%m-%d %H:%M")
+    end_time_s = latest["forecast_end"].strftime("%Y-%m-%d %H:%M")
 
     st.markdown(f"""
     <div class="{card_cls}">
@@ -341,95 +265,90 @@ with left:
             <span class="{conf_cls}">{pct:.2f}%</span>
         </div>
         <div class="bar-track">
-            <div class="{bar_cls}" style="width:{min(pct,100):.1f}%"></div>
+            <div class="{bar_cls}" style="width:{min(pct, 100):.1f}%"></div>
         </div>
         <div class="meta-grid">
             <div class="meta-cell">
-                <div class="meta-cell-label">Image Time</div>
+                <div class="meta-cell-label">Forecast Start</div>
                 <div class="meta-cell-val">{pred_time_s}</div>
             </div>
             <div class="meta-cell">
-                <div class="meta-cell-label">Forecast Window</div>
+                <div class="meta-cell-label">Next 24 Hours</div>
                 <div class="meta-cell-val">→ {end_time_s}</div>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Solar image
-    st.markdown('<div class="sec-label" style="margin-top:16px;">Latest Solar Image</div>',
-                unsafe_allow_html=True)
+    st.markdown('<div class="sec-label" style="margin-top:16px;">Latest Solar Image</div>', unsafe_allow_html=True)
     image_path = latest.get("image_path", "")
     if image_path and Path(str(image_path)).exists():
         image = Image.open(str(image_path))
-        st.image(image,  width="content")
+        st.image(image, width="content")
     else:
         st.markdown("""
-        <div style="background:#000;border-radius:10px;
-                    border:1px solid rgba(255,255,255,0.07);
-                    height:280px;display:flex;align-items:center;
-                    justify-content:center;
-                    color:rgba(232,228,216,0.18);
-                    font-family:'Space Mono',monospace;font-size:11px;">
+        <div class="img-placeholder">
             HMI MAGNETOGRAM · NOT FOUND
         </div>
         """, unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════
-# RIGHT — 12-hour forecast board
+# RIGHT — 24-hour forecast board
 # ════════════════════════════════════════════════════════════════
 with right:
-    st.markdown('<div class="sec-label">Last 12 Forecast Board</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-label">Last 12-Hour Prediction Board</div>', unsafe_allow_html=True)
 
     items_html = []
     for _, row in board_df.iterrows():
-        f        = is_flare(row["prediction_label"])
-        icon_cls = "fi-icon f"    if f else "fi-icon nf"
-        lbl_cls  = "fi-label-f"   if f else "fi-label-nf"
-        prb_cls  = "fi-prob-f"    if f else "fi-prob-nf"
-        icon     = "🔥" if f else "✅"
-        text     = "Yes Flare" if f else "No Flare"
-        pct_r    = fmt_prob(row["probability"])
-        t_start  = row["image_time"].strftime("%Y-%m-%d %H:%M")
-        t_end    = row["forecast_end"].strftime("%Y-%m-%d %H:%M")
+        f = is_flare(row["prediction_label"])
+        icon_cls = "fi-icon f" if f else "fi-icon nf"
+        lbl_cls = "fi-label-f" if f else "fi-label-nf"
+        prb_cls = "fi-prob-f" if f else "fi-prob-nf"
+        icon = '<img src="/static/eclipse_icon_64.png" width="28" />'
+        text = "Flare in Next 24h" if f else "No Flare in Next 24h"
+        pct_r = fmt_prob(row["probability"])
+        t_start = row["image_time"].strftime("%Y-%m-%d %H:%M")
+        t_end = row["forecast_end"].strftime("%Y-%m-%d %H:%M")
 
         items_html.append(f"""
-        <div class="forecast-item">
+        <div class="forecast-item">     
             <div class="{icon_cls}">{icon}</div>
             <div class="fi-body">
                 <div class="{lbl_cls}">{text}</div>
                 <div class="fi-time">{t_start} · until {t_end}</div>
             </div>
             <div class="{prb_cls}">{pct_r:.2f}%</div>
-        </div>""")
+        </div>
+        """)
 
     st.markdown("".join(items_html), unsafe_allow_html=True)
 
-    # ════════════════════════════════════════════════════════════════
-# BOTTOM — Recent prediction history (custom styled table)
 # ════════════════════════════════════════════════════════════════
-# -- Model skill scores table -------------------------------------------------
+# SKILL SCORES
+# ════════════════════════════════════════════════════════════════
 st.markdown(
     '<div class="sec-label" style="margin-top:28px;">Model Skill Scores &nbsp;·&nbsp; M/X class &nbsp;·&nbsp; prob &ge; 0.5</div>',
     unsafe_allow_html=True
 )
+
 _lmsal = load_lmsal()
 if _lmsal is None:
     st.markdown(
-        '<p style="font-size:11px;color:rgba(232,228,216,0.3);'
-        'font-family:Space Mono,monospace">lmsal_all_2026_clean.csv not found.</p>',
-        unsafe_allow_html=True
+        '<p class="info-text">lmsal_all_2026_clean.csv not found.</p>',
+        unsafe_allow_html=True,
     )
 else:
     _edf = df.drop_duplicates(subset="image_time").copy()
     _edf["probability"] = pd.to_numeric(_edf["probability"], errors="coerce")
     _edf = assign_gt(_edf, _lmsal)
     _anchor = _edf["image_time"].max()
+
     _wins = [
-        ("Last 1 Week",  _anchor - pd.Timedelta(weeks=1)),
+        ("Last 1 Week", _anchor - pd.Timedelta(weeks=1)),
         ("Last 1 Month", _anchor - pd.Timedelta(days=30)),
         ("From 01 Feb 26", _anchor - pd.Timedelta(days=85)),
     ]
+
     _skill_rows = []
     for _lbl, _since in _wins:
         _sub = _edf[_edf["image_time"] >= _since]
@@ -439,41 +358,31 @@ else:
             _t, _h = compute_skill(_sub)
             _skill_rows.append((_lbl, f"{_t:+.4f}", f"{_h:+.4f}"))
 
-    _th = (
-        "font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.16em;"
-        "text-transform:uppercase;color:rgba(232,228,216,0.25);font-weight:400;"
-        "padding:0 24px 10px 0;text-align:left;border-bottom:1px solid rgba(255,255,255,0.06);"
-    )
-    _td_base = (
-        "font-family:'Space Mono',monospace;font-size:11px;"
-        "color:rgba(232,228,216,0.6);padding:9px 24px 9px 0;"
-        "border-bottom:1px solid rgba(255,255,255,0.04);"
-    )
-    _td_val = (
-        "font-family:'Space Mono',monospace;font-size:13px;font-weight:700;"
-        "color:#c67bff;padding:9px 24px 9px 0;border-bottom:1px solid rgba(255,255,255,0.04);"
-    )
     _tbody = "".join(
-        f'<tr><td style="{_td_base}">{r[0]}</td>'
-        f'<td style="{_td_val}">{r[1]}</td>'
-        f'<td style="{_td_val}">{r[2]}</td></tr>'
+        f'<tr><td>{r[0]}</td><td class="skill-val">{r[1]}</td><td class="skill-val">{r[2]}</td></tr>'
         for r in _skill_rows
     )
-    st.markdown(
-        f'''<div style="background:rgba(198,123,255,0.05);border:1px solid rgba(198,123,255,0.15);
-border-radius:10px;padding:16px 22px;margin-bottom:20px;">
-<table style="width:100%;border-collapse:collapse;">
-<thead><tr>
-<th style="{_th}">Period</th>
-<th style="{_th}">TSS</th>
-<th style="{_th}">HSS</th>
-</tr></thead>
-<tbody>{_tbody}</tbody>
-</table></div>''',
-        unsafe_allow_html=True
-    )
 
-# -- Confusion Matrix ----------------------------------------------------------
+    st.markdown(f"""
+    <div class="skill-card">
+        <table class="skill-table">
+            <thead>
+                <tr>
+                    <th>Period</th>
+                    <th>TSS</th>
+                    <th>HSS</th>
+                </tr>
+            </thead>
+            <tbody>
+                {_tbody}
+            </tbody>
+        </table>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════════
+# Confusion Matrix
+# ════════════════════════════════════════════════════════════════
 st.markdown(
     '<div class="sec-label" style="margin-top:28px;">Confusion Matrix &nbsp;·&nbsp; M/X class &nbsp;·&nbsp; prob &ge; 0.5 &nbsp;·&nbsp; all data</div>',
     unsafe_allow_html=True
@@ -491,8 +400,8 @@ else:
 
     _hp = _cm_df["probability"] >= 0.5
     _mx = _cm_df["gt_label"] == 1
-    _TP = int(( _hp &  _mx).sum())
-    _FP = int(( _hp & ~_mx).sum())
+    _TP = int((_hp &  _mx).sum())
+    _FP = int((_hp & ~_mx).sum())
     _FN = int((~_hp &  _mx).sum())
     _TN = int((~_hp & ~_mx).sum())
     _N  = _TP + _FP + _FN + _TN
@@ -505,7 +414,6 @@ else:
     _den  = (_P * (_FN + _TN)) + ((_TP + _FP) * _Nn)
     _hss  = (2 * (_TP * _TN - _FN * _FP) / _den) if _den else 0
 
-    # cell styles
     _cell_base = (
         "text-align:center;padding:16px 10px;border-radius:8px;"
         "font-family:'Space Mono',monospace;"
@@ -533,7 +441,6 @@ else:
         "text-align:center;writing-mode:vertical-rl;transform:rotate(180deg);"
         "padding-right:8px;white-space:nowrap;"
     )
-
     _metric_bar_style = (
         "display:flex;gap:0;margin-top:14px;border-radius:8px;overflow:hidden;"
         "border:1px solid rgba(255,255,255,0.06);"
@@ -553,7 +460,6 @@ else:
     st.markdown(f"""
 <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);
 border-radius:10px;padding:20px 22px 16px;margin-bottom:20px;">
-
 <table style="width:100%;border-collapse:separate;border-spacing:6px;">
   <thead>
     <tr>
@@ -591,7 +497,6 @@ border-radius:10px;padding:20px 22px 16px;margin-bottom:20px;">
     </tr>
   </tbody>
 </table>
-
 <div style="{_metric_bar_style}">
   <div style="{_metric_item}">
     <div style="{_metric_lbl}">POD</div>
@@ -616,117 +521,164 @@ border-radius:10px;padding:20px 22px 16px;margin-bottom:20px;">
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="sec-label" style="margin-top:28px;">Recent Prediction History</div>',
-            unsafe_allow_html=True)
-
-history_df = df.head(20).copy()
-rows_html  = []
-for _, row in history_df.iterrows():
-    f       = is_flare(row["prediction_label"])
-    lc      = "lf"  if f else "lnf"
-    pc      = "pf"  if f else "pnf"
-    pct_h   = fmt_prob(row["probability"])
-    t_s     = row["image_time"].strftime("%Y-%m-%d %H:%M")
-    e_s     = row["forecast_end"].strftime("%Y-%m-%d %H:%M")
-    lbl_txt = row["prediction_label"]
-
-    rows_html.append(f"""
-    <tr>
-        <td>{t_s}</td>
-        <td>{e_s}</td>
-        <td class="{lc}">{lbl_txt}</td>
-        <td class="{pc}">{pct_h:.2f}%</td>
-    </tr>""")
-
-st.markdown(f"""
-<div class="hist-wrap">
-<table class="hist-table">
-  <thead>
-    <tr>
-      <th>Image Time</th>
-      <th>Forecast End</th>
-      <th>Label</th>
-      <th>Probability</th>
-    </tr>
-  </thead>
-  <tbody>{"".join(rows_html)}</tbody>
-</table>
-</div>
-""", unsafe_allow_html=True)
-
-
 # ════════════════════════════════════════════════════════════════
-# GOES FLARE DATA — from lmsal_all_2026_clean.csv (scrape_ssw.py)
+# MERGED TABLE — Predictions aligned with actual GOES results
 # ════════════════════════════════════════════════════════════════
-
-SSW_FILE = Path("lmsal_all_2026_clean.csv")
-
-
-@st.cache_data(ttl=3600)
-def load_ssw_flares(path: Path) -> pd.DataFrame:
-    """Load CSV written by scrape_ssw.py — columns: Start, GOES Class, Class_Type"""
-    if not path.exists():
-        return pd.DataFrame(columns=["Start", "GOES Class", "Class_Type"])
-    df_ssw = pd.read_csv(path)
-    df_ssw["Start"] = pd.to_datetime(df_ssw["Start"], errors="coerce")
-    df_ssw = df_ssw.dropna(subset=["Start"]).sort_values("Start").reset_index(drop=True)
-    return df_ssw
-
+st.markdown(
+    '<div class="sec-label" style="margin-top:28px;">Prediction vs Actual GOES Results</div>',
+    unsafe_allow_html=True
+)
 
 flare_df = load_ssw_flares(SSW_FILE)
 
-SSW_NOTE = "Source: lmsal_all_2026_clean.csv (scrape_ssw.py)"
+merged_df = df.copy()
+merged_df["probability"] = pd.to_numeric(merged_df["probability"], errors="coerce")
+merged_df = merged_df.dropna(subset=["image_time", "forecast_end"]).copy()
+merged_df = merged_df.sort_values("image_time", ascending=False).reset_index(drop=True)
 
-# ── Full event log ─────────────────────────────────────────────────────────
-st.markdown(
-    '<div class="sec-label" style="margin-top:36px;">'
-    'All GOES Flare Events (2026-01-01 → Today)</div>',
-    unsafe_allow_html=True,
+def format_actual_goes_result(start_time, end_time, flare_df):
+    if flare_df.empty:
+        return "<span class='hist-empty'>No Flare Detected</span>"
+
+    matches = flare_df[
+        (flare_df["Start"] >= start_time) &
+        (flare_df["Start"] <= end_time)
+    ].sort_values("Start")
+
+    if matches.empty:
+        return "<span class='hist-empty'>No Flare Detected</span>"
+
+    badges = [
+        goes_badge_html(str(ev.get("GOES Class", "")).strip())
+        for _, ev in matches.iterrows()
+    ]
+    return "<div class='actual-goes-inline'>" + "".join(badges) + "</div>"
+
+def actual_goes_text(start_time, end_time, flare_df):
+    if flare_df.empty:
+        return "No Flare Detected"
+
+    matches = flare_df[
+        (flare_df["Start"] >= start_time) &
+        (flare_df["Start"] <= end_time)
+    ].sort_values("Start")
+
+    if matches.empty:
+        return "No Flare Detected"
+
+    return ", ".join(
+        str(ev.get("GOES Class", "")).strip()
+        for _, ev in matches.iterrows()
+    )
+
+# ---------- Download dataframe ----------
+download_df = merged_df.copy()
+download_df["Forecast Start"] = download_df["image_time"].dt.strftime("%Y-%m-%d %H:%M")
+download_df["Forecast End"] = download_df["forecast_end"].dt.strftime("%Y-%m-%d %H:%M")
+download_df["Prediction"] = download_df["prediction_label"]
+download_df["Probability"] = download_df["probability"].apply(lambda x: f"{fmt_prob(x):.2f}%")
+download_df["Actual GOES Result"] = download_df.apply(
+    lambda row: actual_goes_text(row["image_time"], row["forecast_end"], flare_df),
+    axis=1
+)
+download_df = download_df[
+    ["Forecast Start", "Forecast End", "Prediction", "Probability", "Actual GOES Result"]
+]
+
+st.download_button(
+    label="Download merged table CSV",
+    data=download_df.to_csv(index=False).encode("utf-8"),
+    file_name="prediction_vs_actual_goes_results.csv",
+    mime="text/csv"
 )
 
-if flare_df.empty:
-    st.markdown(
-        '<p style="color:rgba(232,228,216,.3);font-size:11px;">'
-        'No flare data found — run scrape_ssw.py to generate lmsal_all_2026_clean.csv.</p>',
-        unsafe_allow_html=True,
+# ---------- Pagination ----------
+ROWS_PER_PAGE = 20
+
+if "merged_table_page" not in st.session_state:
+    st.session_state["merged_table_page"] = 1
+
+total_rows = len(merged_df)
+total_pages = max(1, (total_rows + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE)
+
+st.session_state["merged_table_page"] = min(
+    max(1, st.session_state["merged_table_page"]),
+    total_pages
+)
+
+start_idx = (st.session_state["merged_table_page"] - 1) * ROWS_PER_PAGE
+end_idx = start_idx + ROWS_PER_PAGE
+page_df = merged_df.iloc[start_idx:end_idx].copy()
+
+rows_html = []
+for _, row in page_df.iterrows():
+    f = is_flare(row["prediction_label"])
+    lc = "lf" if f else "lnf"
+    pc = "pf" if f else "pnf"
+    pct_h = fmt_prob(row["probability"])
+    start_s = row["image_time"].strftime("%Y-%m-%d %H:%M")
+    end_s = row["forecast_end"].strftime("%Y-%m-%d %H:%M")
+    pred_txt = row["prediction_label"]
+    actual_goes_html = format_actual_goes_result(row["image_time"], row["forecast_end"], flare_df)
+
+    rows_html.append(
+        f"<tr>"
+        f"<td><span class='forecast-time'>{start_s}</span></td>"
+        f"<td><span class='forecast-time'>{end_s}</span></td>"
+        f"<td><span class='{lc}'>{pred_txt}</span></td>"
+        f"<td><span class='{pc}'>{pct_h:.2f}%</span></td>"
+        f"<td>{actual_goes_html}</td>"
+        f"</tr>"
     )
-else:
-    ev_rows = []
-    for _, row in flare_df.sort_values("Start", ascending=False).iterrows():
-        st_str = row["Start"].strftime("%Y-%m-%d %H:%M") if pd.notna(row["Start"]) else "—"
-        badge  = goes_badge_html(str(row.get("GOES Class", "")))
-        ctype  = str(row.get("Class_Type", "")).strip() or "—"
-        ev_rows.append(f"""
-        <tr>
-            <td>{st_str}</td>
-            <td>{badge}</td>
-            <td>{ctype}</td>
-        </tr>""")
 
-    st.markdown(f"""
-<div class="goes-wrap" style="max-height:420px;overflow-y:auto;">
-<table class="goes-table">
-  <thead>
-    <tr>
-      <th>Start (UTC)</th>
-      <th>GOES Class</th>
-      <th>Type</th>
-    </tr>
-  </thead>
-  <tbody>{"".join(ev_rows)}</tbody>
-</table>
-</div>
-<p style="font-size:9px;color:rgba(232,228,216,.22);font-family:'Space Mono',monospace;margin-top:6px;">
-  {len(flare_df)} events · {SSW_NOTE}
-</p>
-""", unsafe_allow_html=True)
+table_html = (
+    "<div class='hist-wrap'>"
+    "<table class='hist-table'>"
+    "<thead>"
+    "<tr>"
+    "<th>Forecast Start</th>"
+    "<th>Forecast End</th>"
+    "<th>Prediction</th>"
+    "<th>Probability</th>"
+    "<th>Actual GOES Result</th>"
+    "</tr>"
+    "</thead>"
+    "<tbody>"
+    + "".join(rows_html) +
+    "</tbody>"
+    "</table>"
+    "</div>"
+)
 
-st.markdown('</div>', unsafe_allow_html=True)  # close .page-content
+st.markdown(table_html, unsafe_allow_html=True)
+
+# ---------- Left / Right buttons ----------
+prev_col, info_col, next_col = st.columns([1, 2, 1])
+
+with prev_col:
+    if st.button("← Previous", disabled=(st.session_state["merged_table_page"] <= 1), key="prev_page_btn"):
+        st.session_state["merged_table_page"] -= 1
+        st.rerun()
+
+with info_col:
+    st.markdown(
+        f"<div class='page-info'>Page {st.session_state['merged_table_page']} of {total_pages} "
+        f"· Rows {start_idx + 1}-{min(end_idx, total_rows)} of {total_rows}</div>",
+        unsafe_allow_html=True
+    )
+
+with next_col:
+    if st.button("Next →", disabled=(st.session_state["merged_table_page"] >= total_pages), key="next_page_btn"):
+        st.session_state["merged_table_page"] += 1
+        st.rerun()
+
+st.markdown(
+    "<p class='source-note'>Prediction rows aligned with GOES events occurring within each forecast window</p>",
+    unsafe_allow_html=True
+)
 
 # ── Auto-refresh every 60 minutes ─────────────────────────────────────────
-# Reloads the page so the app picks up the latest lmsal_all_2026_clean.csv
-import time as _time
-REFRESH_INTERVAL = 3600   # seconds
+REFRESH_INTERVAL = 3600  # seconds
 
 if "last_refresh" not in st.session_state:
     st.session_state["last_refresh"] = _time.time()
@@ -739,13 +691,8 @@ if elapsed >= REFRESH_INTERVAL:
     st.cache_data.clear()
     st.rerun()
 
-# Small footer showing next refresh countdown
 mins, secs = divmod(remaining, 60)
 st.markdown(
-    f'<p style="font-size:9px;color:rgba(232,228,216,.14);'
-    f'font-family:\'Space Mono\',monospace;text-align:right;'
-    f'padding:0 2rem 1rem 0;">next refresh in {mins:02d}:{secs:02d}</p>',
+    f'<p class="refresh-footer">next refresh in {mins:02d}:{secs:02d}</p>',
     unsafe_allow_html=True,
 )
-
-st.markdown('</div>', unsafe_allow_html=True)  # close .page-content

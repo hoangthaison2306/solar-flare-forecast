@@ -31,7 +31,7 @@ IMG_HEIGHT = 512
 # Each entry is (label, base_url) — tried in order, first reachable wins.
 # The IAS mirror serves its API at the root (no /api/ prefix).
 API_URLS = [
-    ("IAS mirror", "https://helioviewer.ias.u-psud.fr"),
+    ("IAS mirror", "https://api.gs671-suske.ndc.nasa.gov/"),
     ("official",   "https://api.helioviewer.org"),
 ]
 
