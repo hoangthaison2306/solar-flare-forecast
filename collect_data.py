@@ -1,21 +1,14 @@
-"""
-solar_pipeline.py
------------------
-Downloads HMI magnetogram JP2 images from Helioviewer API,
-then converts them to JPG.
-"""
-
+import re
 import requests
 import datetime
 from pathlib import Path
 import numpy as np
 import cv2
 
-
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-START_DATE  = '2026-02-01 00:00:00'
+START_DATE  = '2026-02-01 00:00:00'   # fallback if no files exist yet
 END_DATE    = None
 CADENCE_MIN = 60
 TOLERANCE   = datetime.timedelta(minutes=60)
@@ -28,8 +21,6 @@ RESIZE     = True
 IMG_WIDTH  = 512
 IMG_HEIGHT = 512
 
-# Each entry is (label, base_url) — tried in order, first reachable wins.
-# The IAS mirror serves its API at the root (no /api/ prefix).
 API_URLS = [
     ("IAS mirror", "https://api.gs671-suske.ndc.nasa.gov/"),
     ("official",   "https://api.helioviewer.org"),
@@ -37,7 +28,6 @@ API_URLS = [
 
 
 def get_working_api_base(timeout: int = 10) -> str | None:
-    """Try each base URL in order and return the first one that responds."""
     probe_date = "2026-01-01T00:00:00.000Z"
     for label, base in API_URLS:
         probe = f"{base}/v2/getJP2Image/?date={probe_date}&sourceId=19&jpip=true"
@@ -52,31 +42,82 @@ def get_working_api_base(timeout: int = 10) -> str | None:
     return None
 
 
-# ---------------------------------------------------------------------------
-# Step 1 — Download JP2 images
-# ---------------------------------------------------------------------------
+def parse_hmi_time_from_filename(path: Path) -> datetime.datetime | None:
+    """
+    Parse time from:
+    HMI.m2026.03.08_05.00.00.jp2
+    HMI.m2026.03.08_05.00.00.jpg
+    """
+    match = re.search(r"HMI\.m(\d{4})\.(\d{2})\.(\d{2})_(\d{2})\.(\d{2})\.(\d{2})", path.name)
+    if not match:
+        return None
+    y, mo, d, h, mi, s = map(int, match.groups())
+    return datetime.datetime(y, mo, d, h, mi, s)
+
+
+def get_resume_start_time(
+    basedir_jp2: str = BASEDIR_JP2,
+    fallback_start: str = START_DATE,
+    cadence_min: int = CADENCE_MIN,
+) -> datetime.datetime:
+    """
+    Find the newest existing JP2 file and resume from the next cadence step.
+    If no JP2 exists yet, use START_DATE.
+    """
+    jp2_dir = Path(basedir_jp2)
+    jp2_files = list(jp2_dir.rglob("*.jp2"))
+
+    latest_dt = None
+    for p in jp2_files:
+        dt = parse_hmi_time_from_filename(p)
+        if dt is not None and (latest_dt is None or dt > latest_dt):
+            latest_dt = dt
+
+    if latest_dt is None:
+        start_dt = datetime.datetime.strptime(fallback_start, "%Y-%m-%d %H:%M:%S")
+        print(f"  [RESUME] No existing JP2 files found. Starting from fallback: {start_dt}")
+        return start_dt
+
+    resume_dt = latest_dt + datetime.timedelta(minutes=cadence_min)
+    print(f"  [RESUME] Latest existing JP2: {latest_dt}")
+    print(f"  [RESUME] Resuming from:       {resume_dt}")
+    return resume_dt
+
 
 def download_from_helioviewer(
-    start_date: str               = START_DATE,
+    start_date: str | None        = None,
     end_date: str | None          = END_DATE,
     cadence_min: int              = CADENCE_MIN,
     basedir: str                  = BASEDIR_JP2,
     source_id: int                = SOURCE_ID,
-    tolerance: datetime.timedelta = TOLERANCE,
+    tolerance: datetime.timedelta = TOLERANCE,  # kept only so your function signature stays similar
 ) -> int:
     api_base = get_working_api_base()
     if api_base is None:
         print("  [ERROR] All API mirrors are unreachable. Aborting.")
         return 0
 
-    dt = datetime.datetime.strptime(start_date, "%Y-%m-%d %H:%M:%S")
+    if start_date is None:
+        dt = get_resume_start_time(
+            basedir_jp2=basedir,
+            fallback_start=START_DATE,
+            cadence_min=cadence_min,
+        )
+    else:
+        dt = datetime.datetime.strptime(start_date, "%Y-%m-%d %H:%M:%S")
+
     dt_end = (
         datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         if end_date is None
         else datetime.datetime.strptime(end_date, "%Y-%m-%d %H:%M:%S")
     )
-    step    = datetime.timedelta(minutes=cadence_min)
+
+    step = datetime.timedelta(minutes=cadence_min)
     counter = 0
+
+    if dt >= dt_end:
+        print("  [INFO] No new timestamps to download.")
+        return 0
 
     end_label = (
         dt_end.strftime("%Y-%m-%d %H:%M:%S") + " (UTC now)"
@@ -85,14 +126,13 @@ def download_from_helioviewer(
 
     print(f"{'='*60}")
     print(f"  Helioviewer Download — HMI Magnetogram (sourceId={source_id})")
-    print(f"  Period  : {start_date}  ->  {end_label}")
-    print(f"  Cadence : {cadence_min} min  |  Tolerance : {tolerance}")
+    print(f"  Period  : {dt.strftime('%Y-%m-%d %H:%M:%S')}  ->  {end_label}")
+    print(f"  Cadence : {cadence_min} min")
     print(f"  Save to : {basedir}")
     print(f"{'='*60}\n")
 
     current = dt
     while current < dt_end:
-
         final_date = current.strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
         save_dir = (
@@ -114,32 +154,32 @@ def download_from_helioviewer(
             current += step
             continue
 
-        jpip_url = f"{api_base}/v2/getJP2Image/?date={final_date}&sourceId={source_id}&jpip=true"
+        jp2_url = f"{api_base}/v2/getJP2Image/?date={final_date}&sourceId={source_id}"
 
         try:
-            response      = requests.get(jpip_url, timeout=30)
-            url           = str(response.content)
-            url_tail      = url.rsplit('/', 1)[-1]
-            date_str      = url_tail.rsplit('__', 1)[0][:-4]
-            date_received = datetime.datetime.strptime(date_str, "%Y_%m_%d__%H_%M_%S")
-            delta         = abs(current - date_received)
-        except Exception as e:
-            print(f"  [ERROR] Could not parse JPIP response for {final_date}: {e}")
-            current += step
-            continue
+            response = requests.get(jp2_url, timeout=60)
+            response.raise_for_status()
 
-        if delta <= tolerance:
-            jp2_url = f"{api_base}/v2/getJP2Image/?date={final_date}&sourceId={source_id}"
-            try:
-                hmi_data = requests.get(jp2_url, timeout=60)
-                hmi_data.raise_for_status()
-                file_path.write_bytes(hmi_data.content)
-                counter += 1
-                print(f"  [OK]    {filename}  |  closest: {date_received}  |  delta={delta}")
-            except Exception as e:
-                print(f"  [ERROR] Download failed for {final_date}: {e}")
-        else:
-            print(f"  [SKIP]  {current}  |  closest={date_received}  delta={delta} > tolerance")
+            content_type = response.headers.get("Content-Type", "").lower()
+
+            # reject obvious HTML/error pages
+            if "text/html" in content_type or response.text.lstrip().startswith("<!DOCTYPE html") or response.text.lstrip().startswith("<html"):
+                print(f"  [SKIP]  {filename}  | server returned HTML instead of JP2")
+                current += step
+                continue
+
+            # optional small-size guard for bad responses
+            if len(response.content) < 1000:
+                print(f"  [SKIP]  {filename}  | response too small to be a valid JP2")
+                current += step
+                continue
+
+            file_path.write_bytes(response.content)
+            counter += 1
+            print(f"  [OK]    {filename}")
+
+        except Exception as e:
+            print(f"  [ERROR] Download failed for {final_date}: {e}")
 
         current += step
 
@@ -147,20 +187,16 @@ def download_from_helioviewer(
     return counter
 
 
-# ---------------------------------------------------------------------------
-# Step 2 — Convert JP2 -> JPG
-# ---------------------------------------------------------------------------
-
 def jp2_to_jpg_conversion(
-    source:      str  = BASEDIR_JP2,
-    destination: str  = BASEDIR_JPG,
-    resize:      bool = RESIZE,
-    width:       int  = IMG_WIDTH,
-    height:      int  = IMG_HEIGHT,
+    source: str = BASEDIR_JP2,
+    destination: str = BASEDIR_JPG,
+    resize: bool = RESIZE,
+    width: int = IMG_WIDTH,
+    height: int = IMG_HEIGHT,
 ) -> None:
-    source      = Path(source)
+    source = Path(source)
     destination = Path(destination)
-    jp2_files   = sorted(source.rglob("*.jp2"))
+    jp2_files = sorted(source.rglob("*.jp2"))
 
     if not jp2_files:
         print(f"  [WARNING] No JP2 files found under {source}")
@@ -215,10 +251,6 @@ def jp2_to_jpg_conversion(
         for p in errors:
             print(f"      {p}")
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 if __name__ == '__main__':
     download_from_helioviewer()
