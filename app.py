@@ -250,7 +250,7 @@ with left:
     pct = fmt_prob(latest["probability"])
     card_cls = "alert-card" if flare else "alert-card no-flare"
     eyebrow = "PROBABILITY OF FLARE PREDICTION"
-    title_txt = "Flare detected" if flare else "No flare detected"
+    title_txt = "Flare Detected" if flare else "No Flare Detected"
     bar_cls = "bar-flare" if flare else "bar-noflare"
     conf_cls = "conf-val-flare" if flare else "conf-val-noflare"
     pred_time_s = latest["image_time"].strftime("%Y-%m-%d %H:%M")
@@ -273,7 +273,7 @@ with left:
                 <div class="meta-cell-val">{pred_time_s}</div>
             </div>
             <div class="meta-cell">
-                <div class="meta-cell-label">Next 24 Hours</div>
+                <div class="meta-cell-label">forecast End</div>
                 <div class="meta-cell-val">→ {end_time_s}</div>
             </div>
         </div>
@@ -293,7 +293,7 @@ with left:
         """, unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════
-# RIGHT — 24-hour forecast board
+# RIGHT — 12-hour forecast board
 # ════════════════════════════════════════════════════════════════
 with right:
     st.markdown('<div class="sec-label">Last 12-Hour Prediction Board</div>', unsafe_allow_html=True)
@@ -304,8 +304,8 @@ with right:
         icon_cls = "fi-icon f" if f else "fi-icon nf"
         lbl_cls = "fi-label-f" if f else "fi-label-nf"
         prb_cls = "fi-prob-f" if f else "fi-prob-nf"
-        icon = '<img src="/static/eclipse_icon_64.png" width="28" />'
-        text = "Flare in Next 24h" if f else "No Flare in Next 24h"
+        icon = '<img src="app/static/supernova.png" width="28" style="vertical-align:middle;">'
+        text = "Flare Detected" if f else "No Flare Detected"
         pct_r = fmt_prob(row["probability"])
         t_start = row["image_time"].strftime("%Y-%m-%d %H:%M")
         t_end = row["forecast_end"].strftime("%Y-%m-%d %H:%M")
@@ -346,7 +346,7 @@ else:
     _wins = [
         ("Last 1 Week", _anchor - pd.Timedelta(weeks=1)),
         ("Last 1 Month", _anchor - pd.Timedelta(days=30)),
-        ("From 01 Feb 26", _anchor - pd.Timedelta(days=85)),
+        ("From 01 Feb 26", pd.Timestamp("2026-01-02")),
     ]
 
     _skill_rows = []
@@ -586,9 +586,9 @@ download_df = download_df[
 ]
 
 st.download_button(
-    label="Download merged table CSV",
+    label="Download CSV",
     data=download_df.to_csv(index=False).encode("utf-8"),
-    file_name="prediction_vs_actual_goes_results.csv",
+    file_name="prediction_vs_actual_results.csv",
     mime="text/csv"
 )
 

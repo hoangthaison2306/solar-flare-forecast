@@ -1,0 +1,11 @@
+streamlit 
+pandas 
+numpy 
+torch 
+torchvision 
+pillow 
+opencv-python-headless
+requests 
+beautifulsoup4 
+schedule
+
