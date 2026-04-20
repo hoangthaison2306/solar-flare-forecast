@@ -132,26 +132,6 @@ streamlit run app.py
 
 ---
 
-## What's Not in This Repo
-
-| Path | Why excluded |
-|------|--------------|
-| `data/` | HMI image files — large binary data, regenerate with `collect_data.py` |
-| `new-fold1.pth` | Model weights — too large for git; obtain separately |
-
-Make sure your `.gitignore` includes:
-
-```
-data/
-*.pth
-*.jp2
-__pycache__/
-*.pyc
-.env
-```
-
----
-
 ## References
 
 Developed at **Texas Christian University (TCU)**.  
