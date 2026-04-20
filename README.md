@@ -26,9 +26,6 @@ solar-flare-forecast/
 └── README.md
 ```
 
-> **Note:**
-> The `data/` directory (HMI images) and `new-fold1.pth` (model weights) are not tracked by git. See setup instructions below.
-
 ---
 
 ## System Pipeline
