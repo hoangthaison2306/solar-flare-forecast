@@ -19,8 +19,9 @@ CLASS_NAMES = ["No Flare", "Flare"]
 # LOAD MODEL
 # -------------------------
 from explainingFullDisk.modeling.model import Custom_AlexNet
+from paths import to_storage_path
 
-model = Custom_AlexNet(train=False)
+model = Custom_AlexNet(train=False, pretrained=False)
 checkpoint = torch.load(MODEL_PATH, map_location="cpu")
 model.load_state_dict(checkpoint["model_state_dict"])
 model.eval()
@@ -122,7 +123,7 @@ new_row = pd.DataFrame([{
     "forecast_end":     (image_time + timedelta(hours=24)).isoformat(),
     "prediction_label": label,
     "probability":      confidence,
-    "image_path":       str(latest_image),
+    "image_path":       to_storage_path(latest_image),
 }])
 
 history_df = pd.concat([history_df, new_row], ignore_index=True)

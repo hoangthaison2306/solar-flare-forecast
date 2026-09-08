@@ -5,6 +5,8 @@ from pathlib import Path
 import numpy as np
 import cv2
 
+from freshness import STALE_LOG, content_hash, is_stale, latest_saved_hash, record_stale
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -114,6 +116,10 @@ def download_from_helioviewer(
 
     step = datetime.timedelta(minutes=cadence_min)
     counter = 0
+    stale_count = 0
+    # Rolling hash of the last frame we kept, so a repeated frame is caught
+    # even across runs.
+    prev_hash = latest_saved_hash(Path(basedir))
 
     if dt >= dt_end:
         print("  [INFO] No new timestamps to download.")
@@ -174,7 +180,19 @@ def download_from_helioviewer(
                 current += step
                 continue
 
+            if is_stale(response.content, prev_hash):
+                # Helioviewer served the previous frame again: HMI has no new
+                # observation for this hour. Log the hour as missing instead of
+                # writing a duplicate the predictor would score as independent.
+                digest = content_hash(response.content)
+                record_stale(current, digest)
+                stale_count += 1
+                print(f"  [STALE] {filename}  | identical to previous frame, not saved")
+                current += step
+                continue
+
             file_path.write_bytes(response.content)
+            prev_hash = content_hash(response.content)
             counter += 1
             print(f"  [OK]    {filename}")
 
@@ -183,7 +201,10 @@ def download_from_helioviewer(
 
         current += step
 
-    print(f"\n  Total downloaded: {counter} files\n")
+    print(f"\n  Total downloaded: {counter} files")
+    if stale_count:
+        print(f"  Stale frames rejected: {stale_count}  (logged to {STALE_LOG})")
+    print()
     return counter
 
 

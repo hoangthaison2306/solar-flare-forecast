@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from paths import resolve_image_path
 from PIL import Image
 import time as _time
 from textwrap import dedent
@@ -281,9 +282,9 @@ with left:
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="sec-label" style="margin-top:16px;">Latest Solar Image</div>', unsafe_allow_html=True)
-    image_path = latest.get("image_path", "")
-    if image_path and Path(str(image_path)).exists():
-        image = Image.open(str(image_path))
+    image_path = resolve_image_path(latest.get("image_path", ""))
+    if image_path is not None:
+        image = Image.open(image_path)
         st.image(image, width="content")
     else:
         st.markdown("""

@@ -85,12 +85,20 @@ def compute_tss_hss(df):
     FN = int((~high_prob &  mx_flare).sum())
     TN = int((~high_prob & ~mx_flare).sum())
 
-    pod = TP / (TP + FN) if (TP + FN) else 0
-    far = FP / (FP + TN) if (FP + TN) else 0
-    tss = pod - far
+    P = TP + FN   # observed positives (windows containing an M/X flare)
+    N = TN + FP   # observed negatives
 
-    P = TP + FN
-    N = TN + FP
+    # TSS and HSS are undefined when either class is empty: with no observed
+    # flares POD has no denominator and every positive forecast is scored a
+    # false alarm, which prints as a large negative "skill" that is really
+    # just an absence of events. Report N/A instead of a misleading number.
+    if P == 0 or N == 0:
+        return None, None
+
+    pod  = TP / P            # probability of detection
+    pofd = FP / N            # probability of false detection (not FAR)
+    tss  = pod - pofd
+
     denom = (P * (FN + TN)) + ((TP + FP) * N)
     hss = (2 * (TP * TN - FN * FP) / denom) if denom else 0
 
@@ -116,16 +124,22 @@ def main():
     for label, since in windows:
         subset = df[df["image_time"] >= since]
         if subset.empty:
-            rows.append((label, "N/A", "N/A"))
+            rows.append((label, "N/A", "N/A", "no forecasts in window"))
+            continue
+
+        tss, hss = compute_tss_hss(subset)
+        n_pos = int((subset["gt_label"] == 1).sum())
+        note = f"n={len(subset)}, {n_pos} flare windows"
+        if tss is None:
+            rows.append((label, "N/A", "N/A", note + " — one class empty"))
         else:
-            tss, hss = compute_tss_hss(subset)
-            rows.append((label, f"{tss:+.4f}", f"{hss:+.4f}"))
+            rows.append((label, f"{tss:+.4f}", f"{hss:+.4f}", note))
 
     print()
-    print(f"{'Period':<14} {'TSS':>8} {'HSS':>8}")
-    print("-" * 32)
-    for label, tss, hss in rows:
-        print(f"{label:<14} {tss:>8} {hss:>8}")
+    print(f"{'Period':<14} {'TSS':>8} {'HSS':>8}  {'Sample':<34}")
+    print("-" * 68)
+    for label, tss, hss, note in rows:
+        print(f"{label:<14} {tss:>8} {hss:>8}  {note:<34}")
     print()
 
 if __name__ == "__main__":

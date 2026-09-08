@@ -5,6 +5,8 @@ import cv2
 import numpy as np
 import time
 
+from freshness import content_hash, is_stale, latest_saved_hash, record_stale
+
 SOURCE_ID = 19
 JP2_DIR = Path("./data/latest_jp2")
 JPG_DIR = Path("./data/latest_jpg")
@@ -57,6 +59,13 @@ def download_latest_image():
             print(f"Attempt {attempt+1}: downloading from {api_base}...")
             response = requests.get(jp2_url, timeout=60)
             response.raise_for_status()
+
+            if is_stale(response.content, latest_saved_hash(JP2_DIR)):
+                # Same bytes as the last frame we kept: HMI has nothing new for
+                # this hour. Skip rather than emit a duplicate forecast.
+                record_stale(now_utc, content_hash(response.content))
+                print("Stale frame (identical to previous). No new observation this hour.")
+                return None, None
 
             jp2_path.write_bytes(response.content)
             print(f"Downloaded: {jp2_path}")

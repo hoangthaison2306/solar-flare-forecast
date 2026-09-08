@@ -6,6 +6,7 @@ from PIL import Image
 from datetime import datetime, timedelta
 import torchvision.transforms as transforms
 from explainingFullDisk.modeling.model import Custom_AlexNet
+from paths import to_storage_path
 
 OUTPUT_CSV = Path("prediction_history.csv")
 IMAGE_DIR = Path("./data/hmi_jpg/")
@@ -13,7 +14,7 @@ IMAGE_DIR = Path("./data/hmi_jpg/")
 # -------------------------
 # create model
 # -------------------------
-model = Custom_AlexNet(train=False)
+model = Custom_AlexNet(train=False, pretrained=False)
 
 # load weights
 checkpoint = torch.load("new-fold1.pth", map_location="cpu")
@@ -124,7 +125,7 @@ for jpg_path in IMAGE_DIR.rglob("*.jpg"):
             "forecast_end": forecast_end.isoformat(),
             "prediction_label": prediction_label,
             "probability": probability,
-            "image_path": str(jpg_path),
+            "image_path": to_storage_path(jpg_path),
         })
 
         # Add immediately so duplicates in same run are also skipped

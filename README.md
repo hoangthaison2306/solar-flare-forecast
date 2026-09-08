@@ -15,7 +15,7 @@ solar-flare-forecast/
 ├── collect_latest.py      # latest image fetch
 ├── scrape_ssw.py          # LMSAL flare data scraper
 ├── predict.py             # Predictions for all images
-├── predict_latest.py      # Prediction for latest image
+├── predict_latetest.py      # Prediction for latest image
 ├── eval.py                # Model evaluation (TSS, HSS score)
 ├── scheduler.py           # Hourly automation for scrape_ssw.py, collect_data.py, and predict.py
 ├── prediction_history.csv # Stored predictions
@@ -30,7 +30,7 @@ solar-flare-forecast/
 
 ## System Pipeline
 ```
-How files work and connected to each other. collect_latest.py and predict_latest.py are mainly used for test and retrieve newest detected image and predictions.
+How files work and connected to each other. collect_latest.py and predict_latetest.py are mainly used for test and retrieve newest detected image and predictions.
 ```
 
 ![How files are connected and works](static/file_diagram.png)
@@ -60,7 +60,12 @@ The model uses `Custom_AlexNet` from the [`explainingFullDisk`](https://github.c
 
 ```bash
 git clone https://github.com/chetrajpandey/explainingFullDisk.git
+cd explainingFullDisk && git lfs pull && cd ..   # weights are Git LFS objects
+touch explainingFullDisk/__init__.py             # make it importable as a package
 ```
+
+`new-fold1.pth` ships inside that repo under `modeling/trained_models/`. Without
+`git lfs pull` you get a 134-byte pointer file and `torch.load` fails.
 
 ### 4. Download historical images (optional, for bulk evaluation)
 
@@ -91,7 +96,7 @@ python predict.py
 
 ```bash
 python collect_latest.py
-python predict_latest.py
+python predict_latetest.py
 ```
 ### Evaluation
 Compute TSS and HSS against M/X-class GOES ground truth:
@@ -111,7 +116,7 @@ Last 2 Months +0.XXXX  +0.XXXX
 - **TSS** (True Skill Statistic) = POD − FAR. Range [−1, 1]; 0 = no skill.
 - **HSS** (Heidke Skill Score) = skill relative to random chance. Range (−∞, 1]; 1 = perfect.
 
-A prediction is a **true positive** if any M or X-class flare starts between `image_time` and `forecast_end` (image time + 12 hours).
+A prediction is a **true positive** if any M or X-class flare starts between `image_time` and `forecast_end` (image time + 24 hours).
 
 ---
 ### Launch the dashboard
